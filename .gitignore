@@ -1,0 +1,10 @@
+
+*.sln
+*.suo
+*.vcxproj*
+*.gb
+*.sdf
+gameboy/Debug/
+gameboy/Release/
+gameboy/x64/
+
