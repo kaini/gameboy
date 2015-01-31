@@ -7,6 +7,7 @@
 #include "internal_ram.hpp"
 #include "video.hpp"
 #include "timer.hpp"
+#include "joypad.hpp"
 #include <cstdlib>
 #include <vector>
 #include <fstream>
@@ -70,16 +71,59 @@ void gb::gb_thread::run(gb::rom rom)
 	gb::internal_ram internal_ram;
 	gb::video video;
 	gb::timer timer;
+	gb::joypad joypad;
 
 	// Make Memory
 	gb::memory memory;
 	memory.add_mapping(cartridge.get());
 	memory.add_mapping(&internal_ram);
 	memory.add_mapping(&video);
+	memory.add_mapping(&joypad);
 	memory.add_mapping(&timer);
+	memory.write8(0xff05, 0x00);
+	memory.write8(0xff06, 0x00);
+	memory.write8(0xff07, 0x00);
+	memory.write8(0xff10, 0x80);
+	memory.write8(0xff11, 0xbf);
+	memory.write8(0xff12, 0xf3);
+	memory.write8(0xff14, 0xbf);
+	memory.write8(0xff16, 0x3f);
+	memory.write8(0xff17, 0x00);
+	memory.write8(0xff19, 0xbf);
+	memory.write8(0xff1a, 0x7f);
+	memory.write8(0xff1b, 0xff);
+	memory.write8(0xff1c, 0x9f);
+	memory.write8(0xff1e, 0xbf);
+	memory.write8(0xff20, 0xff);
+	memory.write8(0xff21, 0x00);
+	memory.write8(0xff22, 0x00);
+	memory.write8(0xff23, 0xbf);
+	memory.write8(0xff24, 0x77);
+	memory.write8(0xff25, 0xf3);
+	memory.write8(0xff26, 0xf1);
+	memory.write8(0xff40, 0x91);
+	memory.write8(0xff42, 0x00);
+	memory.write8(0xff43, 0x00);
+	memory.write8(0xff45, 0x00);
+	memory.write8(0xff47, 0xfc);
+	memory.write8(0xff48, 0xff);
+	memory.write8(0xff49, 0xff);
+	memory.write8(0xff4a, 0x00);
+	memory.write8(0xff4b, 0x00);
+	memory.write8(0xffff, 0x00);
+
+	// Register file
+	gb::register_file registers;
+	registers.write8<register8::a>(0x11);
+	registers.write8<register8::f>(0xb0);
+	registers.write16<register16::bc>(0x0013);
+	registers.write16<register16::de>(0x00d8);
+	registers.write16<register16::hl>(0x014d);
+	registers.write16<register16::sp>(0xfffe);
+	registers.write16<register16::pc>(0x0100);
 
 	// Make Cpu
-	gb::z80_cpu cpu(std::move(memory));
+	gb::z80_cpu cpu(std::move(memory), std::move(registers));
 
 	// Let's go :)
 	while (!_want_stop)

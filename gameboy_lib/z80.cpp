@@ -74,48 +74,16 @@ void gb::register_file::debug_print() const
 	debug(buffer);
 }
 
-gb::z80_cpu::z80_cpu(gb::memory memory) :
-	_value8(0xFF), _value16(0xFFFF), _memory(std::move(memory)), _ime(true), _halted(false)
+gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
+	_registers(registers),
+	_value8(0xFF),
+	_value16(0xFFFF),
+	_memory(std::move(memory)),
+	_ime(true),
+	_halted(false),
+	_double_speed(false)
 {
-	_registers.write8<register8::a>(0x11);
-	_registers.write8<register8::f>(0xb0);
-	_registers.write16<register16::bc>(0x0013);
-	_registers.write16<register16::de>(0x00d8);
-	_registers.write16<register16::hl>(0x014d);
-	_registers.write16<register16::sp>(0xfffe);
-	_registers.write16<register16::pc>(0x0100);
-	
-	_memory.write8(0xff05, 0x00);
-	_memory.write8(0xff06, 0x00);
-	_memory.write8(0xff07, 0x00);
-	_memory.write8(0xff10, 0x80);
-	_memory.write8(0xff11, 0xbf);
-	_memory.write8(0xff12, 0xf3);
-	_memory.write8(0xff14, 0xbf);
-	_memory.write8(0xff16, 0x3f);
-	_memory.write8(0xff17, 0x00);
-	_memory.write8(0xff19, 0xbf);
-	_memory.write8(0xff1a, 0x7f);
-	_memory.write8(0xff1b, 0xff);
-	_memory.write8(0xff1c, 0x9f);
-	_memory.write8(0xff1e, 0xbf);
-	_memory.write8(0xff20, 0xff);
-	_memory.write8(0xff21, 0x00);
-	_memory.write8(0xff22, 0x00);
-	_memory.write8(0xff23, 0xbf);
-	_memory.write8(0xff24, 0x77);
-	_memory.write8(0xff25, 0xf3);
-	_memory.write8(0xff26, 0xf1);
-	_memory.write8(0xff40, 0x91);
-	_memory.write8(0xff42, 0x00);
-	_memory.write8(0xff43, 0x00);
-	_memory.write8(0xff45, 0x00);
-	_memory.write8(0xff47, 0xfc);
-	_memory.write8(0xff48, 0xff);
-	_memory.write8(0xff49, 0xff);
-	_memory.write8(0xff4a, 0x00);
-	_memory.write8(0xff4b, 0x00);
-	_memory.write8(0xffff, 0x00);
+	_memory.add_mapping(this);
 }
 
 int gb::z80_cpu::tick()
@@ -138,7 +106,7 @@ int gb::z80_cpu::tick()
 				{
 					pc = 0x0040 + 8 * i;
 					if_ &= ~(1 << i);
-					_halted = false;
+					_ime = false;
 					break;
 				}
 			}
@@ -203,7 +171,7 @@ int gb::z80_cpu::tick()
 #endif
 
 	// "real" time spent
-	return clock_ns * op->cycles();
+	return (_double_speed ? clock_fast_ns : clock_ns) * op->cycles();
 }
 
 void gb::z80_cpu::post_interrupt(interrupt interrupt)
@@ -211,5 +179,54 @@ void gb::z80_cpu::post_interrupt(interrupt interrupt)
 	uint8_t if_ = _memory.read8(internal_ram::if_);
 	if_ |= static_cast<uint8_t>(interrupt);
 	_memory.write8(internal_ram::if_, if_);
+
+	if (_halted && (_memory.read8(internal_ram::ie) & static_cast<uint8_t>(interrupt)) != 0)
+	{
+		_halted = false;
+	}
+}
+
+void gb::z80_cpu::stop()
+{
+	if (_speed_switch)
+	{
+		_double_speed = !_double_speed;
+		_speed_switch = 0;
+	}
+	else
+	{
+		// TODO
+		debug("STOP not implemented completely!");
+	}
+}
+
+bool gb::z80_cpu::read8(uint16_t addr, uint8_t &value) const
+{
+	if (addr == key1)
+	{
+		value = 0;
+		if (_double_speed)
+			value |= (1 << 7);
+		if (_speed_switch)
+			value |= 1;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+bool gb::z80_cpu::write8(uint16_t addr, uint8_t value)
+{
+	if (addr == key1)
+	{
+		_speed_switch = (value & 1) == 1;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 

@@ -72,7 +72,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 		{
 			debug("WARNING: write in VRAM during mode 3");
 		}
-		else
+		//else
 		{
 			_vram[_vram_bank][addr - 0x8000] = value;
 		}
@@ -84,7 +84,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 		{
 			debug("WARNING: write in OAM during mode 2 or 3");
 		}
-		else
+		//else
 		{
 			_sprite_attribs[addr - 0xFE00] = value;
 		}
@@ -309,7 +309,7 @@ void gb::video::draw_line(const int y)
 
 		if (bg_enabled)
 		{
-			const size_t map_index = (y + scy) / 8 * 32 + (x + scx) / 8;
+			const size_t map_index = (((y + scy) / 8) % 32) * 32 + ((x + scx) / 8) % 32;
 			const auto tile_idx = bg_tile_map[map_index];
 			const auto tile_attrs = bg_tile_map_attrs[map_index];
 			const auto bgp_idx = tile_attrs & 0x07;

@@ -70,7 +70,7 @@ void gb::timer::tick(z80_cpu &cpu, int ns)
 			tima_increment_at = 244140;  // 4096 Hz
 			break;
 		case 1:
-			tima_increment_at = 3815;  // 262144 Hz
+			tima_increment_at = 3726;  // 262144 Hz
 			break;
 		case 2:
 			tima_increment_at = 15259;  // 65536 Hz

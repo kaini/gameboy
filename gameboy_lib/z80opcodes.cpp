@@ -53,61 +53,82 @@ std::string to_string(operation op)
 
 uint8_t execute_alu(operation op, uint8_t dst, uint8_t src, gb::register_file &rs)
 {
-	uint8_t result;
 	switch (op)
 	{
 	case operation::add:
-		result = dst + src;
+	{
+		uint8_t result = dst + src;
 		rs.set<flag::z>(result == 0);
 		rs.set<flag::n>(false);
 		rs.set<flag::h>((dst & 0xF) > 0xF - (src & 0xF));
 		rs.set<flag::c>(dst > 0xFF - src);
-		break;
+		return result;
+	}
 	case operation::adc:
-		result = dst + src + (rs.get<flag::c>() ? 1 : 0);
-		rs.set<flag::z>(result == 0);
-		rs.set<flag::n>(false);
-		rs.set<flag::h>((dst & 0xF) > 0xF - (src & 0xF) - 1);
-		rs.set<flag::c>(dst > 0xFF - src - 1);
-		break;
+	{
+		const bool carry = rs.get<flag::c>();
+		uint8_t result = execute_alu(operation::add, dst, src + (carry ? 1 : 0), rs);
+		if (carry && (src & 0xF) == 0xF)
+			rs.set<flag::h>(true);
+		if (carry && src == 0xFF)
+			rs.set<flag::c>(true);
+		return result;
+	}
 	case operation::sub:
-		result = execute_alu(operation::add, dst, ~src + 1, rs);
+	{
+		uint8_t result = dst - src;
+		rs.set<flag::z>(result == 0);
 		rs.set<flag::n>(true);
-		break;
+		rs.set<flag::h>((dst & 0xF) < (src & 0xF));
+		rs.set<flag::c>(dst < src);
+		return result;
+	}
 	case operation::sbc:
-		result = execute_alu(operation::adc, dst, ~(src + (rs.get<flag::c>() ? 1 : 0)) + 1, rs);
-		rs.set<flag::n>(true);
-		break;
+	{
+		const bool carry = rs.get<flag::c>();
+		uint8_t result = execute_alu(operation::sub, dst, src + (carry ? 1 : 0), rs);
+		if (carry && (src & 0xF) == 0xF)
+			rs.set<flag::h>(true);
+		if (carry && src == 0xFF)
+			rs.set<flag::c>(true);
+		return result;
+	}
 	case operation::and_:
-		result = dst & src;
+	{
+		uint8_t result = dst & src;
 		rs.set<flag::z>(result == 0);
 		rs.set<flag::n>(false);
 		rs.set<flag::h>(true);
 		rs.set<flag::c>(false);
-		break;
+		return result;
+	}
 	case operation::or_:
-		result = dst | src;
+	{
+		uint8_t result = dst | src;
 		rs.set<flag::z>(result == 0);
 		rs.set<flag::n>(false);
 		rs.set<flag::h>(false);
 		rs.set<flag::c>(false);
-		break;
+		return result;
+	}
 	case operation::xor_:
-		result = dst ^ src;
+	{
+		uint8_t result = dst ^ src;
 		rs.set<flag::z>(result == 0);
 		rs.set<flag::n>(false);
 		rs.set<flag::h>(false);
 		rs.set<flag::c>(false);
-		break;
+		return result;
+	}
 	case operation::cp:
+	{
 		execute_alu(operation::sub, dst, src, rs);
-		result = dst;  // throw away subtraction result
-		break;
+		return dst;  // throw away subtraction result
+	}
 	default:
 		assert(false);
 		return 0;
 	}
-	return result;
 }
 
 enum class cond
@@ -138,7 +159,6 @@ std::string to_string(cond c)
 bool check_condition(const gb::z80_cpu &cpu, cond c)
 {
 	auto &rs = cpu.registers();
-	bool jump = false;
 
 	switch (c)
 	{
@@ -354,8 +374,8 @@ public:
 
 		cpu.registers().set<flag::z>(false);
 		cpu.registers().set<flag::n>(false);
-		cpu.registers().set<flag::h>((sp & 0x0FFF) > 0x0FFF - (offset & 0x0FFF));
-		cpu.registers().set<flag::c>(sp > 0xFFFF - offset);
+		cpu.registers().set<flag::h>((sp & 0x000F) > 0x000F - (offset & 0x000F));
+		cpu.registers().set<flag::c>((sp & 0x00FF) > 0x00FF - (offset & 0x00FF));
 		cpu.registers().write16<r16::hl>(hl);
 	}
 };
@@ -464,13 +484,13 @@ public:
 		if (Dec)
 		{
 			cpu.registers().set<flag::n>(true);
-			cpu.registers().set<flag::h>(value == 0x10);
+			cpu.registers().set<flag::h>((value & 0x0F) == 0x00);
 			--value;
 		}
 		else  // Inc
 		{
 			cpu.registers().set<flag::n>(false);
-			cpu.registers().set<flag::h>(value == 0x0F);
+			cpu.registers().set<flag::h>((value & 0x0F) == 0x0F);
 			++value;
 		}
 		cpu.registers().set<flag::z>(value == 0);
@@ -490,13 +510,13 @@ public:
 		if (Dec)
 		{
 			cpu.registers().set<flag::n>(true);
-			cpu.registers().set<flag::h>(value == 0x10);
+			cpu.registers().set<flag::h>((value & 0x0F) == 0x00);
 			--value;
 		}
 		else  // Inc
 		{
 			cpu.registers().set<flag::n>(false);
-			cpu.registers().set<flag::h>(value == 0x0F);
+			cpu.registers().set<flag::h>((value & 0x0F) == 0x0F);
 			++value;
 		}
 		cpu.registers().set<flag::z>(value == 0);
@@ -536,8 +556,8 @@ public:
 
 		cpu.registers().set<flag::z>(false);
 		cpu.registers().set<flag::n>(false);
-		cpu.registers().set<flag::h>((sp & 0x0FFF) > 0x0FFF - offset);
-		cpu.registers().set<flag::c>(sp > 0xFFFF - offset);
+		cpu.registers().set<flag::h>((sp & 0x000F) > 0x000F - (offset & 0x000F));
+		cpu.registers().set<flag::c>((sp & 0x00FF) > 0x00FF - (offset & 0x00FF));
 
 		sp += offset;
 		cpu.registers().write16<r16::sp>(sp);
@@ -568,17 +588,43 @@ public:
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
-		uint8_t value = cpu.registers().read8<r8::a>();
-		if ((value & 0xF) > 9)
+		// I don't even ...
+		// http://forums.nesdev.com/viewtopic.php?t=9088
+		// https://courses.engr.illinois.edu/ece390/books/artofasm/CH06/CH06-2.html
+		// http://en.wikipedia.org/wiki/Binary-coded_decimal
+		// http://www.emutalk.net/threads/41525-Game-Boy/page109
+
+		unsigned int value = cpu.registers().read8<r8::a>();
+
+		if (cpu.registers().get<flag::n>())
 		{
-			value += 6;
+			if (cpu.registers().get<flag::h>())
+			{
+				value = (value - 6) & 0xFF;
+			}
+			if (cpu.registers().get<flag::c>())
+			{
+				value -= 0x60;
+			}
 		}
-		if (value > 0x9F || cpu.registers().get<flag::c>())
+		else
 		{
-			value += 0x60;
-			cpu.registers().set<flag::c>(true);
+			if ((value & 0x0F) > 0x09 || cpu.registers().get<flag::h>())
+			{
+				value += 0x06;
+			}
+			if (value > 0x9F || cpu.registers().get<flag::c>())
+			{
+				value += 0x60;
+			}
 		}
-		cpu.registers().write8<r8::a>(value);
+		
+		cpu.registers().set<flag::h>(false);
+		if ((value & 0x100) == 0x100)
+			cpu.registers().set<flag::c>(true);  // do not reset c, if already set!
+		value &= 0xFF;
+		cpu.registers().set<flag::z>(value == 0);
+		cpu.registers().write8<r8::a>(static_cast<uint8_t>(value));
 	}
 };
 
@@ -624,7 +670,7 @@ public:
 class opcode_halt : public gb::opcode
 {
 public:
-	opcode_halt() : gb::opcode("HALT", 0, 0) {}
+	opcode_halt() : gb::opcode("HALT", 0, 4) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -635,12 +681,11 @@ public:
 class opcode_stop : public gb::opcode
 {
 public:
-	opcode_stop() : gb::opcode("STOP", 0, 0) {}
+	opcode_stop() : gb::opcode("STOP", 0, 4) {}
 
-	void execute(gb::z80_cpu &) const override
+	void execute(gb::z80_cpu &cpu) const override
 	{
-		// TODO
-		debug("WARNING: STOP nip");
+		cpu.stop();
 	}
 };
 
@@ -673,12 +718,11 @@ public:
 	void execute(gb::z80_cpu &) const override {}
 };
 
-template <bool Left, bool Carry> uint8_t rd_impl(gb::z80_cpu &cpu, uint8_t value)
+template <bool Left, bool Carry, bool CorrectZ> uint8_t rd_impl(gb::z80_cpu &cpu, uint8_t value)
 {
-	uint8_t bit;
-	if (Left)  // <<<
+	if (Left)  // Left <<<
 	{
-		bit = value & (1 << 7);
+		uint8_t bit = value & (1 << 7);
 		value <<= 1;
 		if (Carry)
 		{
@@ -692,7 +736,7 @@ template <bool Left, bool Carry> uint8_t rd_impl(gb::z80_cpu &cpu, uint8_t value
 	}
 	else  // Right >>>
 	{
-		bit = value & 1;
+		uint8_t bit = value & 1;
 		value >>= 1;
 		if (Carry)
 		{
@@ -705,7 +749,7 @@ template <bool Left, bool Carry> uint8_t rd_impl(gb::z80_cpu &cpu, uint8_t value
 		cpu.registers().set<flag::c>(bit != 0);
 	}
 
-	cpu.registers().set<flag::z>(value == 0);
+	cpu.registers().set<flag::z>(CorrectZ && value == 0);
 	cpu.registers().set<flag::n>(false);
 	cpu.registers().set<flag::h>(false);
 
@@ -720,7 +764,7 @@ public:
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
-		cpu.registers().write8<r8::a>(rd_impl<Left, Carry>(cpu, cpu.registers().read8<r8::a>()));
+		cpu.registers().write8<r8::a>(rd_impl<Left, Carry, false>(cpu, cpu.registers().read8<r8::a>()));
 	}
 };
 
@@ -1117,7 +1161,7 @@ public:
 	
 	void execute(gb::z80_cpu &cpu) const override
 	{
-		cpu.registers().write8<Dst>(rd_impl<Left, Carry>(cpu, cpu.registers().read8<Dst>()));
+		cpu.registers().write8<Dst>(rd_impl<Left, Carry, true>(cpu, cpu.registers().read8<Dst>()));
 	}
 };
 
@@ -1132,7 +1176,7 @@ public:
 	void execute(gb::z80_cpu &cpu) const override
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, rd_impl<Left, Carry>(cpu, cpu.memory().read8(addr)));
+		cpu.memory().write8(addr, rd_impl<Left, Carry, true>(cpu, cpu.memory().read8(addr)));
 	}
 };
 
@@ -1362,7 +1406,7 @@ gb::opcode_table init_cb_opcodes()
 	ops[0x0C] = make_unique<opcode_cb_rdc_r<false, true, r::h>>();
 	ops[0x0D] = make_unique<opcode_cb_rdc_r<false, true, r::l>>();
 	ops[0x0E] = make_unique<opcode_cb_rdc_m<false, true, r16::hl>>();
-	ops[0x0F] = make_unique<opcode_cb_rdc_r<false, true, r::l>>();
+	ops[0x0F] = make_unique<opcode_cb_rdc_r<false, true, r::a>>();
 	ops[0x10] = make_unique<opcode_cb_rdc_r<true, false, r::b>>();
 	ops[0x11] = make_unique<opcode_cb_rdc_r<true, false, r::c>>();
 	ops[0x12] = make_unique<opcode_cb_rdc_r<true, false, r::d>>();
@@ -1378,7 +1422,7 @@ gb::opcode_table init_cb_opcodes()
 	ops[0x1C] = make_unique<opcode_cb_rdc_r<false, false, r::h>>();
 	ops[0x1D] = make_unique<opcode_cb_rdc_r<false, false, r::l>>();
 	ops[0x1E] = make_unique<opcode_cb_rdc_m<false, false, r16::hl>>();
-	ops[0x1F] = make_unique<opcode_cb_rdc_r<false, false, r::l>>();
+	ops[0x1F] = make_unique<opcode_cb_rdc_r<false, false, r::a>>();
 	ops[0x20] = make_unique<opcode_cb_sda_r<true, r::b>>();
 	ops[0x21] = make_unique<opcode_cb_sda_r<true, r::c>>();
 	ops[0x22] = make_unique<opcode_cb_sda_r<true, r::d>>();

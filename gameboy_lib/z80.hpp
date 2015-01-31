@@ -59,14 +59,14 @@ public:
 	template <> uint16_t read16<register16::pc>() const { return _pc; }
 
 	template <register16 R> void write16(uint16_t value);
-	template <> void write16<register16::af>(uint16_t value) { _a = value >> 8; _f = value & 0xFF; }
+	template <> void write16<register16::af>(uint16_t value) { _a = value >> 8; _f = value & 0xF0; }
 	template <> void write16<register16::bc>(uint16_t value) { _b = value >> 8; _c = value & 0xFF; }
 	template <> void write16<register16::de>(uint16_t value) { _d = value >> 8; _e = value & 0xFF; }
 	template <> void write16<register16::hl>(uint16_t value) { _h = value >> 8; _l = value & 0xFF; }
 	template <> void write16<register16::sp>(uint16_t value) { _sp = value; }
 	template <> void write16<register16::pc>(uint16_t value) { _pc = value; }
 
-	template <register8 R> uint8_t read8 () const;
+	template <register8 R> uint8_t read8() const;
 	template <> uint8_t read8<register8::a>() const { return _a; }
 	template <> uint8_t read8<register8::b>() const { return _b; }
 	template <> uint8_t read8<register8::c>() const { return _c; }
@@ -82,7 +82,7 @@ public:
 	template <> void write8<register8::c>(uint8_t value) { _c = value; }
 	template <> void write8<register8::d>(uint8_t value) { _d = value; }
 	template <> void write8<register8::e>(uint8_t value) { _e = value; }
-	template <> void write8<register8::f>(uint8_t value) { _f = value; }
+	template <> void write8<register8::f>(uint8_t value) { _f = value & 0xF0; }
 	template <> void write8<register8::h>(uint8_t value) { _h = value; }
 	template <> void write8<register8::l>(uint8_t value) { _l = value; }
 
@@ -97,13 +97,15 @@ private:
 	uint8_t _f, _a, _c, _b, _e, _d, _l, _h;
 };
 
-class z80_cpu
+class z80_cpu : public memory_mapping
 {
 public:
+	static const uint16_t key1 = 0xFF4D;
+
 	static const int clock_ns = 238;  // 238,4185791015625
 	static const int clock_fast_ns = 119;  // 119,20928955078125
 
-	z80_cpu(memory memory);
+	z80_cpu(memory memory, register_file registers);
 	int tick();
 
 	register_file &registers() { return _registers; }
@@ -116,10 +118,16 @@ public:
 	/** Sets or resets the Interrupt Master Enable flag. */
 	void set_ime(bool value) { _ime = value; }
 	void post_interrupt(interrupt interrupt);
-	void halt() { if (_ime) _halted = true; }
+	void halt() { _halted = true; }
 
 	/** Fast Mode. */
-	bool double_speed() const { return false; }
+	bool double_speed() const { return _double_speed; }
+	void stop();
+
+	/** Memory mapping */
+	// TODO pull interrupt registers here
+	bool read8(uint16_t addr, uint8_t &value) const override;
+	bool write8(uint16_t addr, uint8_t value) override;
 
 private:
 	register_file _registers;
@@ -128,6 +136,9 @@ private:
 	gb::memory _memory;
 	bool _ime;
 	bool _halted;
+
+	bool _double_speed;
+	bool _speed_switch;
 };
 
 }

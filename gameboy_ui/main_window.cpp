@@ -1,5 +1,5 @@
 #include "main_window.hpp"
-#include "debug.hpp"
+#include <debug.hpp>
 #include <wx/menu.h>
 #include <wx/menuitem.h>
 #include <wx/dcbuffer.h>
@@ -46,7 +46,7 @@ void ui::main_frame::on_start(wxCommandEvent &)
 	// Load ROM
 	std::vector<uint8_t> rom_data;
 	std::ifstream in;
-	in.open("colorbar.gb", std::ios_base::binary | std::ios_base::in);
+	in.open("cpu_instrs.gb", std::ios_base::binary | std::ios_base::in);
 	while (in.good())
 	{
 		char c;
@@ -77,7 +77,7 @@ wxEND_EVENT_TABLE()
 
 ui::game_frame::game_frame(wxWindow *parent, gb::gb_thread *thread) :
 	wxFrame(parent, wxID_ANY, "GameBoy Game", wxDefaultPosition,
-		wxSize(gb::video::width, gb::video::height)),
+		wxSize(gb::video::width + 30, gb::video::height + 40)),
 	_thread(thread)
 {
 	SetBackgroundStyle(wxBG_STYLE_PAINT);

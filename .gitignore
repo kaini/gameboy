@@ -1,10 +1,10 @@
 
-*.sln
 *.suo
-*.vcxproj*
 *.gb
 *.sdf
-gameboy/Debug/
-gameboy/Release/
-gameboy/x64/
+*.opensdf
+*.user
+Debug/
+Release/
+x64/
 

@@ -29,7 +29,7 @@ void gb::memory::write8(uint16_t addr, uint8_t value)
 		}
 	}
 
-	debug("WARNING: non-mapped write ", addr);
+	debug("WARNING: non-mapped write ", addr, ": ", static_cast<int>(value));
 }
 
 uint16_t gb::memory::read16(uint16_t addr) const
