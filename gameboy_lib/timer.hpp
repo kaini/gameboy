@@ -18,17 +18,21 @@ public:
 	/** Timer control */
 	static const uint16_t tac = 0xFF07;
 
-	static const int tick_ns = 61035;  // 16384 Hz
+	static const double tick_ns;    // 16384 Hz
+	static const double tima_0_ns;  // 4096 Hz
+	static const double tima_1_ns;  // 262144 Hz
+	static const double tima_2_ns;  // 65536 Hz
+	static const double tima_3_ns;  // 16384 Hz
 
 	timer();
 
 	bool read8(uint16_t addr, uint8_t & value) const override;
 	bool write8(uint16_t addr, uint8_t value) override;
-	void tick(z80_cpu &cpu, int ns);
+	void tick(z80_cpu &cpu, double ns);
 
 private:
 	uint8_t _div, _tima, _tma, _tac;
-	int _last_div_increment, _last_tima_increment;
+	double _last_div_increment, _last_tima_increment;
 };
 
 }

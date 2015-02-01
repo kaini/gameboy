@@ -97,16 +97,16 @@ private:
 	uint8_t _f, _a, _c, _b, _e, _d, _l, _h;
 };
 
-class z80_cpu : public memory_mapping
+class z80_cpu : private memory_mapping
 {
 public:
 	static const uint16_t key1 = 0xFF4D;
 
-	static const int clock_ns = 238;  // 238,4185791015625
-	static const int clock_fast_ns = 119;  // 119,20928955078125
+	static const double clock_ns;
+	static const double clock_fast_ns;
 
 	z80_cpu(memory memory, register_file registers);
-	int tick();
+	double tick();
 
 	register_file &registers() { return _registers; }
 	const register_file &registers() const { return _registers; }
@@ -124,11 +124,6 @@ public:
 	bool double_speed() const { return _double_speed; }
 	void stop();
 
-	/** Memory mapping */
-	// TODO pull interrupt registers here
-	bool read8(uint16_t addr, uint8_t &value) const override;
-	bool write8(uint16_t addr, uint8_t value) override;
-
 private:
 	register_file _registers;
 	uint8_t _value8;
@@ -139,6 +134,11 @@ private:
 
 	bool _double_speed;
 	bool _speed_switch;
+
+	/** Memory mapping */
+	// TODO pull interrupt registers here
+	bool read8(uint16_t addr, uint8_t &value) const override;
+	bool write8(uint16_t addr, uint8_t value) override;
 };
 
 }

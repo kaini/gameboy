@@ -27,7 +27,7 @@ private:
 };
 
 using opcode_table = std::array<std::unique_ptr<opcode>, 0x100>;
-extern const opcode_table opcodes;
-extern const opcode_table cb_opcodes;
+const opcode_table &opcodes();
+const opcode_table &cb_opcodes();
 
 }

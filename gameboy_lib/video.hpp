@@ -103,7 +103,7 @@ public:
 	bool read8(uint16_t addr, uint8_t &value) const override;
 	bool write8(uint16_t addr, uint8_t value) override;
 
-	void tick(z80_cpu &cpu, int ns);
+	void tick(z80_cpu &cpu, double ns);
 
 	bool is_enabled() const { return (access_register(r::lcdc) & lcdc_flag::lcd_enable) != 0; }
 	const raw_image &image() const { return _image; }
@@ -114,7 +114,7 @@ private:
 	const uint8_t &access_register(uint16_t addr) const;
 	void draw_line(const int line);
 	void set_ly(z80_cpu &cpu, uint8_t value);
-	auto &image(int x, int y) { return _image[y][x]; }
+	std::array<uint8_t, 3> &image(int x, int y) { return _image[y][x]; }
 	const uint8_t *get_bg_tile(uint8_t bank, uint8_t idx) const;
 	const std::array<uint8_t, 3> get_bg_color(size_t bgp_idx, size_t color_idx) const;
 
@@ -129,8 +129,8 @@ private:
 	int _vram_bank;
 
 	raw_image _image;
-	int _mode_time;
-	int _vblank_ly_time;
+	double _mode_time;
+	double _vblank_ly_time;
 	int _hblanks;
 };
 

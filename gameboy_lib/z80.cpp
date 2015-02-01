@@ -8,6 +8,9 @@
 #include <iomanip>
 #include <algorithm>
 
+const double gb::z80_cpu::clock_ns = 238.4185791015625;  // 1000000000 / 4194304
+const double gb::z80_cpu::clock_fast_ns = 119.20928955078125;  // 1000000000 / 4194304 / 2
+
 std::string gb::to_string(register8 r)
 {
 	switch (r)
@@ -86,7 +89,7 @@ gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
 	_memory.add_mapping(this);
 }
 
-int gb::z80_cpu::tick()
+double gb::z80_cpu::tick()
 {
 	// interrupts
 	if (_ime)
@@ -125,7 +128,7 @@ int gb::z80_cpu::tick()
 	// fetch & decode
 	uint16_t pc = _registers.read16<register16::pc>();
 	uint8_t opcode = _memory.read8(pc++);
-	const auto &op = opcode == 0xCB ? cb_opcodes[_memory.read8(pc++)] : opcodes[opcode];
+	const auto &op = opcode == 0xCB ? cb_opcodes()[_memory.read8(pc++)] : opcodes()[opcode];
 
 	switch (op->extra_bytes())
 	{

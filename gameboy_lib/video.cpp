@@ -176,7 +176,7 @@ const uint8_t &gb::video::access_register(uint16_t addr) const
 	return _registers[addr - 0xFF40];
 }
 
-void gb::video::tick(gb::z80_cpu &cpu, int ns)
+void gb::video::tick(gb::z80_cpu &cpu, double ns)
 {
 	if ((access_register(r::lcdc) & lcdc_flag::lcd_enable) == 0)
 	{

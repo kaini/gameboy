@@ -128,7 +128,7 @@ void gb::gb_thread::run(gb::rom rom)
 	// Let's go :)
 	while (!_want_stop)
 	{
-		int ns = cpu.tick();
+		double ns = cpu.tick();
 		video.tick(cpu, ns);
 		timer.tick(cpu, ns);
 

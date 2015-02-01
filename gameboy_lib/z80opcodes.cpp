@@ -4,6 +4,7 @@
 #include "debug.hpp"
 #include <string>
 #include <cassert>
+#include <mutex>
 
 namespace
 {
@@ -11,6 +12,11 @@ namespace
 using r8 = gb::register8;
 using r16 = gb::register16;
 using flag = gb::cpu_flag;
+
+std::once_flag opcodes_table_once;
+gb::opcode_table opcodes_table;
+std::once_flag cb_opcodes_table_once;
+gb::opcode_table cb_opcodes_table;
 
 uint16_t sign_extend(uint8_t param)
 {
@@ -281,7 +287,7 @@ public:
 class opcode_ldff_ai : public gb::opcode
 {
 public:
-	opcode_ldff_ai() : gb::opcode("LD A,(ff00h+$)", 1, 8) {}
+	opcode_ldff_ai() : gb::opcode("LD A,(ff00h+$)", 1, 12) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -303,7 +309,7 @@ public:
 class opcode_ldff_ia : public gb::opcode
 {
 public:
-	opcode_ldff_ia() : gb::opcode("LD (ff00h+$),A", 1, 8) {}
+	opcode_ldff_ia() : gb::opcode("LD (ff00h+$),A", 1, 12) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -772,7 +778,7 @@ template <cond Cond>
 class opcode_jp_i : public gb::opcode
 {
 public:
-	opcode_jp_i() : gb::opcode("JP " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 12) {}
+	opcode_jp_i() : gb::opcode("JP " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 16) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -798,7 +804,7 @@ template <cond Cond>
 class opcode_jr_i : public gb::opcode
 {
 public:
-	opcode_jr_i() : gb::opcode("JR " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 1, 8) {}
+	opcode_jr_i() : gb::opcode("JR " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 1, 12) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -814,7 +820,7 @@ template <cond Cond>
 class opcode_call : public gb::opcode
 {
 public:
-	opcode_call() : gb::opcode("CALL " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 12) {}
+	opcode_call() : gb::opcode("CALL " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 24) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -834,7 +840,7 @@ template <uint8_t Addr>
 class opcode_rst : public gb::opcode
 {
 public:
-	opcode_rst() : gb::opcode("RST " + std::to_string(Addr), 0, 32) {}
+	opcode_rst() : gb::opcode("RST " + std::to_string(Addr), 0, 16) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -851,7 +857,7 @@ template <cond Cond, bool Ei>
 class opcode_ret : public gb::opcode
 {
 public:
-	opcode_ret() : gb::opcode(std::string("RET") + (Ei ? "I" : "") + (Cond == cond::nop ? std::string("") : (" " + to_string(Cond))), 0, 8) {}
+	opcode_ret() : gb::opcode(std::string("RET") + (Ei ? "I" : "") + (Cond == cond::nop ? std::string("") : (" " + to_string(Cond))), 0, 12) {}
 
 	void execute(gb::z80_cpu &cpu) const override
 	{
@@ -880,13 +886,246 @@ public:
 	}
 };
 
-gb::opcode_table init_opcodes()
+template <bool Left, bool Carry, gb::register8 Dst>
+class opcode_cb_rdc_r : public gb::opcode
+{
+public:
+	opcode_cb_rdc_r() :
+		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " " + to_string(Dst), 0, 8)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		cpu.registers().write8<Dst>(rd_impl<Left, Carry, true>(cpu, cpu.registers().read8<Dst>()));
+	}
+};
+
+template <bool Left, bool Carry, gb::register16 Dst>
+class opcode_cb_rdc_m : public gb::opcode
+{
+public:
+	opcode_cb_rdc_m() :
+		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " (" + to_string(Dst) + ")", 0, 16)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, rd_impl<Left, Carry, true>(cpu, cpu.memory().read8(addr)));
+	}
+};
+
+template <bool Left> uint8_t sda_impl(gb::z80_cpu &cpu, uint8_t value)
+{
+	if (Left)
+	{
+		bool bit = (value & 0x80) != 0;
+		value <<= 1;
+		cpu.registers().set<flag::c>(bit);
+	}
+	else  // Right
+	{
+		uint8_t msb = value & 0x80;
+		bool lsb = (value & 1) == 1;
+		value >>= 1;
+		value |= msb;
+		cpu.registers().set<flag::c>(lsb);
+	}
+
+	cpu.registers().set<flag::z>(value == 0);
+	cpu.registers().set<flag::n>(false);
+	cpu.registers().set<flag::h>(false);
+
+	return value;
+}
+
+template <bool Left, gb::register8 Dst>
+class opcode_cb_sda_r : public gb::opcode
+{
+public:
+	opcode_cb_sda_r() :
+		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A " + to_string(Dst), 0, 8)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		cpu.registers().write8<Dst>(sda_impl<Left>(cpu, cpu.registers().read8<Dst>()));
+	}
+};
+
+template <bool Left, gb::register16 Dst>
+class opcode_cb_sda_m : public gb::opcode
+{
+public:
+	opcode_cb_sda_m() :
+		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A (" + to_string(Dst) + ")", 0, 16)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, sda_impl<Left>(cpu, cpu.memory().read8(addr)));
+	}
+};
+
+uint8_t swap_impl(gb::z80_cpu &cpu, uint8_t value)
+{
+	uint8_t low = value & 0x0F;
+	value >>= 4;
+	value |= low << 4;
+	cpu.registers().set<flag::z>(value == 0);
+	cpu.registers().set<flag::n>(false);
+	cpu.registers().set<flag::h>(false);
+	cpu.registers().set<flag::c>(false);
+	return value;
+}
+
+template <gb::register8 Dst>
+class opcode_cb_swap_r : public gb::opcode
+{
+public:
+	opcode_cb_swap_r() :
+		gb::opcode("SWAP " + to_string(Dst), 0, 8)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		cpu.registers().write8<Dst>(swap_impl(cpu, cpu.registers().read8<Dst>()));
+	}
+};
+
+template <gb::register16 Dst>
+class opcode_cb_swap_m : public gb::opcode
+{
+public:
+	opcode_cb_swap_m() :
+		gb::opcode("SWAP (" + to_string(Dst) + ")", 0, 16)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, swap_impl(cpu, cpu.memory().read8(addr)));
+	}
+};
+
+uint8_t srl_impl(gb::z80_cpu &cpu, uint8_t value)
+{
+	bool bit = (value & 1) == 1;
+	value >>= 1;
+	cpu.registers().set<flag::z>(value == 0);
+	cpu.registers().set<flag::n>(false);
+	cpu.registers().set<flag::h>(false);
+	cpu.registers().set<flag::c>(bit);
+	return value;
+}
+
+template <gb::register8 Dst>
+class opcode_cb_srl_r : public gb::opcode
+{
+public:
+	opcode_cb_srl_r() :
+		gb::opcode("SRL " + to_string(Dst), 0, 8)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		cpu.registers().write8<Dst>(srl_impl(cpu, cpu.registers().read8<Dst>()));
+	}
+};
+
+template <gb::register16 Dst>
+class opcode_cb_srl_m : public gb::opcode
+{
+public:
+	opcode_cb_srl_m() :
+		gb::opcode("SRL (" + to_string(Dst) + ")", 0, 16)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, srl_impl(cpu, cpu.memory().read8(addr)));
+	}
+};
+
+template <uint8_t bit, gb::register8 Dst>
+class opcode_cb_bit_r : public gb::opcode
+{
+public:
+	opcode_cb_bit_r() :
+		gb::opcode("BIT " + std::to_string(bit) + "," + to_string(Dst), 0, 8)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		cpu.registers().set<flag::z>((cpu.registers().read8<Dst>() & (1 << bit)) == 0);
+		cpu.registers().set<flag::n>(false);
+		cpu.registers().set<flag::h>(true);
+	}
+};
+
+template <uint8_t bit, gb::register16 Dst>
+class opcode_cb_bit_m : public gb::opcode
+{
+public:
+	opcode_cb_bit_m() :
+		gb::opcode("BIT " + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 12)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.registers().set<flag::z>((cpu.memory().read8(addr) & (1 << bit)) == 0);
+		cpu.registers().set<flag::n>(false);
+		cpu.registers().set<flag::h>(true);
+	}
+};
+
+template <bool res, uint8_t bit, gb::register8 Dst>
+class opcode_cb_resset_r : public gb::opcode
+{
+public:
+	opcode_cb_resset_r() :
+		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + "," + to_string(Dst), 0, 8)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		uint8_t b = 1 << bit;
+		if (res)
+			cpu.registers().write8<Dst>(cpu.registers().read8<Dst>() & ~b);
+		else  // set
+			cpu.registers().write8<Dst>(cpu.registers().read8<Dst>() | b);
+	}
+};
+
+template <bool res, uint8_t bit, gb::register16 Dst>
+class opcode_cb_resset_m : public gb::opcode
+{
+public:
+	opcode_cb_resset_m() :
+		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 16)
+	{}
+	
+	void execute(gb::z80_cpu &cpu) const override
+	{
+		uint8_t b = 1 << bit;
+		uint16_t addr = cpu.registers().read16<Dst>();
+		if (res)
+			cpu.memory().write8(addr, cpu.memory().read8(addr) & ~b);
+		else  // set
+			cpu.memory().write8(addr, cpu.memory().read8(addr) | b);
+	}
+};
+
+void init_opcodes()
 {
 	using r = gb::register8;
 	using r16 = gb::register16;
 	using std::make_unique;
+	auto &ops = opcodes_table;
 
-	gb::opcode_table ops;
 	ops[0x00] = make_unique<opcode_nop>();
 	ops[0x01] = make_unique<opcode_ld16_ri<r16::bc>>();
 	ops[0x02] = make_unique<opcode_ld_mr<r16::bc, r::a>>();
@@ -1090,7 +1329,7 @@ gb::opcode_table init_opcodes()
 	ops[0xC8] = make_unique<opcode_ret<cond::z, false>>();
 	ops[0xC9] = make_unique<opcode_ret<cond::nop, false>>();
 	ops[0xCA] = make_unique<opcode_jp_i<cond::z>>();
-	ops[0xCB] = nullptr;
+	ops[0xCB] = make_unique<opcode_hang>();
 	ops[0xCC] = make_unique<opcode_call<cond::z>>();
 	ops[0xCD] = make_unique<opcode_call<cond::nop>>();
 	ops[0xCE] = make_unique<opcode_alu_ri<operation::adc, r::a>>();
@@ -1098,7 +1337,7 @@ gb::opcode_table init_opcodes()
 	ops[0xD0] = make_unique<opcode_ret<cond::nc, false>>();
 	ops[0xD1] = make_unique<opcode_pop<r16::de>>();
 	ops[0xD2] = make_unique<opcode_jp_i<cond::nc>>();
-	ops[0xD3] = nullptr;
+	ops[0xD3] = make_unique<opcode_hang>();
 	ops[0xD4] = make_unique<opcode_call<cond::nc>>();
 	ops[0xD5] = make_unique<opcode_push<r16::de>>();
 	ops[0xD6] = make_unique<opcode_alu_ri<operation::sub, r::a>>();
@@ -1106,32 +1345,32 @@ gb::opcode_table init_opcodes()
 	ops[0xD8] = make_unique<opcode_ret<cond::c, false>>();
 	ops[0xD9] = make_unique<opcode_ret<cond::nop, true>>();
 	ops[0xDA] = make_unique<opcode_jp_i<cond::c>>();
-	ops[0xDB] = nullptr;
+	ops[0xDB] = make_unique<opcode_hang>();
 	ops[0xDC] = make_unique<opcode_call<cond::c>>();
-	ops[0xDD] = nullptr;
+	ops[0xDD] = make_unique<opcode_hang>();
 	ops[0xDE] = make_unique<opcode_alu_ri<operation::sbc, r::a>>();
 	ops[0xDF] = make_unique<opcode_rst<0x18>>();
 	ops[0xE0] = make_unique<opcode_ldff_ia>();
 	ops[0xE1] = make_unique<opcode_pop<r16::hl>>();
 	ops[0xE2] = make_unique<opcode_ldff_ca>();
-	ops[0xE3] = nullptr;
-	ops[0xE4] = nullptr;
+	ops[0xE3] = make_unique<opcode_hang>();
+	ops[0xE4] = make_unique<opcode_hang>();
 	ops[0xE5] = make_unique<opcode_push<r16::hl>>();
 	ops[0xE6] = make_unique<opcode_alu_ri<operation::and_, r::a>>();
 	ops[0xE7] = make_unique<opcode_rst<0x20>>();
 	ops[0xE8] = make_unique<opcode_add16_sp_i>();
 	ops[0xE9] = make_unique<opcode_jp_hl>();
 	ops[0xEA] = make_unique<opcode_ld_mir<r::a>>();
-	ops[0xEB] = nullptr;
-	ops[0xEC] = nullptr;
-	ops[0xED] = nullptr;
+	ops[0xEB] = make_unique<opcode_hang>();
+	ops[0xEC] = make_unique<opcode_hang>();
+	ops[0xED] = make_unique<opcode_hang>();
 	ops[0xEE] = make_unique<opcode_alu_ri<operation::xor_, r::a>>();
 	ops[0xEF] = make_unique<opcode_rst<0x28>>();
 	ops[0xF0] = make_unique<opcode_ldff_ai>();
 	ops[0xF1] = make_unique<opcode_pop<r16::af>>();
 	ops[0xF2] = make_unique<opcode_ldff_ac>();
 	ops[0xF3] = make_unique<opcode_di>();
-	ops[0xF4] = nullptr;
+	ops[0xF4] = make_unique<opcode_hang>();
 	ops[0xF5] = make_unique<opcode_push<r16::af>>();
 	ops[0xF6] = make_unique<opcode_alu_ri<operation::or_, r::a>>();
 	ops[0xF7] = make_unique<opcode_rst<0x30>>();
@@ -1139,258 +1378,19 @@ gb::opcode_table init_opcodes()
 	ops[0xF9] = make_unique<opcode_ld16_rr<r16::sp, r16::hl>>();
 	ops[0xFA] = make_unique<opcode_ld_rmi<r::a>>();
 	ops[0xFB] = make_unique<opcode_ei>();
-	ops[0xFC] = nullptr;
-	ops[0xFD] = nullptr;
+	ops[0xFC] = make_unique<opcode_hang>();
+	ops[0xFD] = make_unique<opcode_hang>();
 	ops[0xFE] = make_unique<opcode_alu_ri<operation::cp, r::a>>();
 	ops[0xFF] = make_unique<opcode_rst<0x38>>();
-
-	for (auto &op : ops)
-		if (op == nullptr)
-			op = make_unique<opcode_hang>();
-
-	return ops;
 }
 
-template <bool Left, bool Carry, gb::register8 Dst>
-class opcode_cb_rdc_r : public gb::opcode
-{
-public:
-	opcode_cb_rdc_r() :
-		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " " + to_string(Dst), 0, 8)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		cpu.registers().write8<Dst>(rd_impl<Left, Carry, true>(cpu, cpu.registers().read8<Dst>()));
-	}
-};
-
-template <bool Left, bool Carry, gb::register16 Dst>
-class opcode_cb_rdc_m : public gb::opcode
-{
-public:
-	opcode_cb_rdc_m() :
-		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " (" + to_string(Dst) + ")", 0, 16)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, rd_impl<Left, Carry, true>(cpu, cpu.memory().read8(addr)));
-	}
-};
-
-template <bool Left> uint8_t sda_impl(gb::z80_cpu &cpu, uint8_t value)
-{
-	if (Left)
-	{
-		bool bit = (value & 0x80) != 0;
-		value <<= 1;
-		cpu.registers().set<flag::c>(bit);
-	}
-	else  // Right
-	{
-		uint8_t msb = value & 0x80;
-		bool lsb = (value & 1) == 1;
-		value >>= 1;
-		value |= msb;
-		cpu.registers().set<flag::c>(lsb);
-	}
-
-	cpu.registers().set<flag::z>(value == 0);
-	cpu.registers().set<flag::n>(false);
-	cpu.registers().set<flag::h>(false);
-
-	return value;
-}
-
-template <bool Left, gb::register8 Dst>
-class opcode_cb_sda_r : public gb::opcode
-{
-public:
-	opcode_cb_sda_r() :
-		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A " + to_string(Dst), 0, 8)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		cpu.registers().write8<Dst>(sda_impl<Left>(cpu, cpu.registers().read8<Dst>()));
-	}
-};
-
-template <bool Left, gb::register16 Dst>
-class opcode_cb_sda_m : public gb::opcode
-{
-public:
-	opcode_cb_sda_m() :
-		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A (" + to_string(Dst) + ")", 0, 16)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, sda_impl<Left>(cpu, cpu.memory().read8(addr)));
-	}
-};
-
-uint8_t swap_impl(gb::z80_cpu &cpu, uint8_t value)
-{
-	uint8_t low = value & 0x0F;
-	value >>= 4;
-	value |= low << 4;
-	cpu.registers().set<flag::z>(value == 0);
-	cpu.registers().set<flag::n>(false);
-	cpu.registers().set<flag::h>(false);
-	cpu.registers().set<flag::c>(false);
-	return value;
-}
-
-template <gb::register8 Dst>
-class opcode_cb_swap_r : public gb::opcode
-{
-public:
-	opcode_cb_swap_r() :
-		gb::opcode("SWAP " + to_string(Dst), 0, 8)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		cpu.registers().write8<Dst>(swap_impl(cpu, cpu.registers().read8<Dst>()));
-	}
-};
-
-template <gb::register16 Dst>
-class opcode_cb_swap_m : public gb::opcode
-{
-public:
-	opcode_cb_swap_m() :
-		gb::opcode("SWAP (" + to_string(Dst) + ")", 0, 16)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, swap_impl(cpu, cpu.memory().read8(addr)));
-	}
-};
-
-uint8_t srl_impl(gb::z80_cpu &cpu, uint8_t value)
-{
-	bool bit = (value & 1) == 1;
-	value >>= 1;
-	cpu.registers().set<flag::z>(value == 0);
-	cpu.registers().set<flag::n>(false);
-	cpu.registers().set<flag::h>(false);
-	cpu.registers().set<flag::c>(bit);
-	return value;
-}
-
-template <gb::register8 Dst>
-class opcode_cb_srl_r : public gb::opcode
-{
-public:
-	opcode_cb_srl_r() :
-		gb::opcode("SRL " + to_string(Dst), 0, 8)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		cpu.registers().write8<Dst>(srl_impl(cpu, cpu.registers().read8<Dst>()));
-	}
-};
-
-template <gb::register16 Dst>
-class opcode_cb_srl_m : public gb::opcode
-{
-public:
-	opcode_cb_srl_m() :
-		gb::opcode("SRL (" + to_string(Dst) + ")", 0, 16)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, srl_impl(cpu, cpu.memory().read8(addr)));
-	}
-};
-
-template <uint8_t bit, gb::register8 Dst>
-class opcode_cb_bit_r : public gb::opcode
-{
-public:
-	opcode_cb_bit_r() :
-		gb::opcode("BIT " + std::to_string(bit) + "," + to_string(Dst), 0, 8)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		cpu.registers().set<flag::z>((cpu.registers().read8<Dst>() & (1 << bit)) == 0);
-		cpu.registers().set<flag::n>(false);
-		cpu.registers().set<flag::h>(true);
-	}
-};
-
-template <uint8_t bit, gb::register16 Dst>
-class opcode_cb_bit_m : public gb::opcode
-{
-public:
-	opcode_cb_bit_m() :
-		gb::opcode("BIT " + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 16)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.registers().set<flag::z>((cpu.memory().read8(addr) & (1 << bit)) == 0);
-		cpu.registers().set<flag::n>(false);
-		cpu.registers().set<flag::h>(true);
-	}
-};
-
-template <bool res, uint8_t bit, gb::register8 Dst>
-class opcode_cb_resset_r : public gb::opcode
-{
-public:
-	opcode_cb_resset_r() :
-		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + "," + to_string(Dst), 0, 8)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		uint8_t b = 1 << bit;
-		if (res)
-			cpu.registers().write8<Dst>(cpu.registers().read8<Dst>() & ~b);
-		else  // set
-			cpu.registers().write8<Dst>(cpu.registers().read8<Dst>() | b);
-	}
-};
-
-template <bool res, uint8_t bit, gb::register16 Dst>
-class opcode_cb_resset_m : public gb::opcode
-{
-public:
-	opcode_cb_resset_m() :
-		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 16)
-	{}
-	
-	void execute(gb::z80_cpu &cpu) const override
-	{
-		uint8_t b = 1 << bit;
-		uint16_t addr = cpu.registers().read16<Dst>();
-		if (res)
-			cpu.memory().write8(addr, cpu.memory().read8(addr) & ~b);
-		else  // set
-			cpu.memory().write8(addr, cpu.memory().read8(addr) | b);
-	}
-};
-
-gb::opcode_table init_cb_opcodes()
+void init_cb_opcodes()
 {
 	using r = gb::register8;
 	using r16 = gb::register16;
 	using std::make_unique;
-
-	gb::opcode_table ops;
+	auto &ops = cb_opcodes_table;
+	
 	ops[0x00] = make_unique<opcode_cb_rdc_r<true, true, r::b>>();
 	ops[0x01] = make_unique<opcode_cb_rdc_r<true, true, r::c>>();
 	ops[0x02] = make_unique<opcode_cb_rdc_r<true, true, r::d>>();
@@ -1647,8 +1647,6 @@ gb::opcode_table init_cb_opcodes()
 	ops[0xFD] = make_unique<opcode_cb_resset_r<false, 7, r::l>>();
 	ops[0xFE] = make_unique<opcode_cb_resset_m<false, 7, r16::hl>>();
 	ops[0xFF] = make_unique<opcode_cb_resset_r<false, 7, r::a>>();
-
-	return ops;
 }
 
 }
@@ -1660,5 +1658,14 @@ gb::opcode::opcode(std::string mnemonic, int extra_bytes, int cycles) :
 {
 }
 
-const gb::opcode_table gb::opcodes(init_opcodes());
-const gb::opcode_table gb::cb_opcodes(init_cb_opcodes());
+const gb::opcode_table &gb::opcodes()
+{
+	std::call_once(opcodes_table_once, init_opcodes);
+	return opcodes_table;
+}
+
+const gb::opcode_table &gb::cb_opcodes()
+{
+	std::call_once(cb_opcodes_table_once, init_cb_opcodes);
+	return cb_opcodes_table;
+}
