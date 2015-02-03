@@ -10,6 +10,9 @@ namespace gb
 class cart_mbc1 final : public memory_mapping
 {
 public:
+	static const uint8_t enable_ram_mask = 0x0A;
+	static const uint8_t ram_mode_mask = 0x01;
+
 	cart_mbc1(rom rom);
 
 	bool read8(uint16_t addr, uint8_t &value) const override;

@@ -1,4 +1,5 @@
 #include "joypad.hpp"
+#include "bits.hpp"
 
 gb::joypad::joypad() :
 	_button_keys(false), _direction_keys(false)
@@ -11,9 +12,9 @@ bool gb::joypad::read8(uint16_t addr, uint8_t &value) const
 	{
 		value = 0;
 		if (_button_keys)
-			value |= 1 << 5;
+			bit::set(value, button_keys_bit);
 		if (_direction_keys)
-			value |= 1 << 4;
+			bit::set(value, direction_keys_bit);
 		return true;
 	}
 	else
@@ -26,8 +27,8 @@ bool gb::joypad::write8(uint16_t addr, uint8_t value)
 {
 	if (addr == 0xFF00)
 	{
-		_button_keys = (value & (1 << 5)) != 0;
-		_direction_keys = (value & (1 << 4)) != 0;
+		_button_keys = bit::test(value, button_keys_bit);
+		_direction_keys = bit::test(value, direction_keys_bit);
 		return true;
 	}
 	else

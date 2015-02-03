@@ -125,7 +125,7 @@ void main_window::update_rom_info()
 		_ui.sgbCheckBox->setChecked(_rom->sgb());
 		_ui.jpCheckBox->setChecked(_rom->japanese());
 		_ui.logoOkCheckBox->setChecked(_rom->valid_logo());
-		_ui.headerOkCheckBox->setChecked(true);  // TODO
-		_ui.globalOkCheckBox->setChecked(true);  // TODO
+		_ui.headerOkCheckBox->setChecked(_rom->header_checksum_valid());
+		_ui.globalOkCheckBox->setChecked(_rom->global_checksum_valid());
 	}
 }

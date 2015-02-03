@@ -1,5 +1,6 @@
 #include "cart_mbc1.hpp"
 #include "debug.hpp"
+#include "bits.hpp"
 #include <algorithm>
 
 gb::cart_mbc1::cart_mbc1(rom rom) :
@@ -62,7 +63,7 @@ bool gb::cart_mbc1::write8(uint16_t addr, uint8_t value)
 {
 	if (addr < 0x2000)
 	{
-		_ram_enabled = ((value & 0x0F) == 0x0A);
+		_ram_enabled = bit::test(value, enable_ram_mask);
 		return true;
 	}
 	else if (addr < 0x4000)
@@ -77,7 +78,7 @@ bool gb::cart_mbc1::write8(uint16_t addr, uint8_t value)
 	}
 	else if (addr < 0x8000)
 	{
-		_ram_mode = ((value & 0x01) == 1);
+		_ram_mode = bit::test(value, ram_mode_mask);
 		return true;
 	}
 	else if (0xA000 <= addr && addr < 0xC000)

@@ -87,3 +87,23 @@ gb::rom::rom(std::vector<uint8_t> data_move_from) :
 
 	_global_checksum = _data[0x14E] << 8 | _data[0x14F];
 }
+
+bool gb::rom::header_checksum_valid() const
+{
+	uint8_t sum = 0;
+	for (size_t i = 0x0134; i <= 0x014C; ++i)
+	{
+		sum = sum - _data[i] - 1;
+	}
+	return sum == _header_checksum;
+}
+
+bool gb::rom::global_checksum_valid() const
+{
+	uint16_t sum = 0;
+	for (size_t i = 0; i < _data.size(); ++i)
+		if (i != 0x14E && i != 0x14F)
+			sum += _data[i];
+	return sum == _global_checksum;
+}
+

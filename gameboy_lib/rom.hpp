@@ -33,6 +33,8 @@ public:
 	int rom_version() const { return _rom_version; }
 	uint8_t header_checksum() const { return _header_checksum; }
 	uint16_t global_checksum() const { return _global_checksum; }
+	bool header_checksum_valid() const;
+	bool global_checksum_valid() const;
 
 private:
 	std::vector<uint8_t> _data;
