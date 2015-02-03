@@ -29,28 +29,32 @@ void game_window::update_image()
 
 void game_window::paintEvent(QPaintEvent *)
 {
-	const auto image = _thread.fetch_image();
-	const QImage qImage(&image[0][0][0], gb::video::width, gb::video::height, QImage::Format_RGB888);
-	
-	const double aspect = static_cast<double>(gb::video::height) / gb::video::width;
-	const double real_aspect = static_cast<double>(height()) / width();
-	QRect iRect;
-	if (real_aspect < aspect)
-	{
-		iRect.setHeight(height());
-		iRect.setWidth(static_cast<int>(std::round(1 / aspect * iRect.height())));
-		iRect.moveLeft((width() - iRect.width()) / 2);
-	}
-	else
-	{
-		iRect.setWidth(width());
-		iRect.setHeight(static_cast<int>(std::round(aspect * iRect.width())));
-		iRect.moveTop((height() - iRect.height()) / 2);
-	}
-	
 	QPainter painter(this);
 	painter.setBrush(Qt::black);
 	painter.setPen(Qt::black);
 	painter.drawRect(rect());
-	painter.drawImage(iRect, qImage);
+
+	const auto image = _thread.fetch_image();
+	if (image)
+	{
+		const QImage qImage(&(*image)[0][0][0], gb::video::width, gb::video::height, QImage::Format_RGB888);
+
+		const double aspect = static_cast<double>(gb::video::height) / gb::video::width;
+		const double real_aspect = static_cast<double>(height()) / width();
+		QRect iRect;
+		if (real_aspect < aspect)
+		{
+			iRect.setHeight(height());
+			iRect.setWidth(static_cast<int>(std::round(1 / aspect * iRect.height())));
+			iRect.moveLeft((width() - iRect.width()) / 2);
+		}
+		else
+		{
+			iRect.setWidth(width());
+			iRect.setHeight(static_cast<int>(std::round(aspect * iRect.width())));
+			iRect.moveTop((height() - iRect.height()) / 2);
+		}
+		
+		painter.drawImage(iRect, qImage);
+	}
 }

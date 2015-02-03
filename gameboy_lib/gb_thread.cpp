@@ -15,7 +15,7 @@
 #include <memory>
 
 gb::gb_thread::gb_thread() :
-	_running(false), _got_image(true)
+	_running(false), _finished(false), _want_stop(false), _got_image(true)
 {
 }
 
@@ -28,7 +28,6 @@ void gb::gb_thread::start(gb::rom rom)
 {
 	assert(!_running);
 	_running = true;
-	_want_stop = false;
 	_thread = std::thread(&gb_thread::run, this, std::move(rom));
 }
 
@@ -37,21 +36,33 @@ void gb::gb_thread::stop()
 	if (_running)
 	{
 		_want_stop = true;
-		_running = false;
 		_thread.join();
 	}
 }
 
-gb::video::raw_image gb::gb_thread::fetch_image()
+std::unique_ptr<gb::video::raw_image> gb::gb_thread::fetch_image()
 {
-	std::unique_lock<std::mutex> lock(_image_mutex);
+	std::unique_lock<std::mutex> lock(_mutex);
 	_got_image = false;
-	_got_image_cv.wait(lock, [this] { return _got_image; });
+	_got_image_cv.wait(lock, [this] { return _got_image || _finished; });
 	return std::move(_image);
 }
 
 void gb::gb_thread::run(gb::rom rom)
 {
+	// Set the finished flag in all cases!
+	struct set_finished
+	{
+		gb_thread *that;
+		set_finished(gb_thread *that) : that(that) {}
+		~set_finished()
+		{
+			std::lock_guard<std::mutex> lock(that->_mutex);
+			that->_finished = true;
+			that->_got_image_cv.notify_all();
+		}
+	} set_finished(this);
+
 	// Make Cartridge
 	std::unique_ptr<gb::memory_mapping> cartridge;
 	switch (rom.cartridge())
@@ -63,7 +74,6 @@ void gb::gb_thread::run(gb::rom rom)
 		cartridge = std::make_unique<gb::cart_mbc1>(std::move(rom));
 		break;
 	default:
-		// TODO print error?
 		return;
 	}
 
@@ -133,15 +143,13 @@ void gb::gb_thread::run(gb::rom rom)
 		timer.tick(cpu, ns);
 
 		{
-			std::lock_guard<std::mutex> lock(_image_mutex);
+			std::lock_guard<std::mutex> lock(_mutex);
 			if (!_got_image)
 			{
 				if (video.is_enabled())
-					_image = video.image();
+					_image = std::make_unique<video::raw_image>(video.image());
 				else
-					for (auto &row : _image)
-						for (auto &pixel : row)
-							std::fill(pixel.begin(), pixel.end(), 0xFF);
+					_image = nullptr;
 
 				_got_image = true;
 				_got_image_cv.notify_one();
