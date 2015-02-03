@@ -6,6 +6,7 @@
 #include <boost/test/unit_test.hpp>
 #include <unordered_set>
 #include <cstdio>
+#include <algorithm>
 
 namespace
 {
@@ -15,7 +16,9 @@ class test_memory : public gb::memory_mapping
 public:
 	test_memory(std::vector<uint8_t> code, std::unordered_set<uint16_t> writes={}) :
 		_code(std::move(code)), _writes(writes)
-	{}
+	{
+		std::fill(_ram.begin(), _ram.end(), 0);
+	}
 
 	bool read8(uint16_t addr, uint8_t &value) const override
 	{
