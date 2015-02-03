@@ -1,7 +1,7 @@
 
-set (SOURCES gameboy_ui.cpp main.cpp)
-set (HEADERS gameboy_ui.hpp)
-set (UIS gameboy_ui.ui)
+set (SOURCES main_window.cpp game_window.cpp main.cpp)
+set (HEADERS main_window.hpp game_window.hpp)
+set (UIS main_window.ui game_window.ui)
 set (RESOURCES gameboy_ui.qrc gameboy_ui.rc gameboy_ui.ico)
 
 source_group ("UI Files" FILES ${UIS} ${RESOURCES})
@@ -18,10 +18,7 @@ include_directories (../gameboy_lib)
 
 if (WIN32)
 	set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /subsystem:windows /entry:mainCRTStartup")
-
 endif (WIN32)
-
-
 
 add_executable (gameboy_ui ${SOURCES} ${HEADERS} ${UIS} ${RESOURCES})
 

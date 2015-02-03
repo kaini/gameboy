@@ -1,39 +1,46 @@
-#include "gameboy_ui.hpp"
+#include "main_window.hpp"
+#include "game_window.hpp"
 #include <rom.hpp>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QCloseEvent>
 #include <fstream>
 
-gameboy_ui::gameboy_ui(QWidget *parent)
-	: QMainWindow(parent)
+main_window::main_window(QWidget *parent)
+	: QMainWindow(parent), _game_window(nullptr)
 {
 	_ui.setupUi(this);
 
-	connect(_ui.actionExit, SIGNAL(triggered()), this, SLOT(exit()));
+	connect(_ui.actionExit, SIGNAL(triggered()), this, SLOT(close()));
 	connect(_ui.loadRomPushButton, SIGNAL(clicked()), this, SLOT(open_rom()));
+	connect(_ui.playPushButton, SIGNAL(clicked()), this, SLOT(play()));
 
 	update_rom_info();
 }
 
-gameboy_ui::~gameboy_ui()
+main_window::~main_window()
 {
 }
 
-void gameboy_ui::exit()
+void main_window::closeEvent(QCloseEvent *event)
 {
+	if (_game_window)
+		_game_window->close();
 	close();
+	event->accept();
 }
 
-void gameboy_ui::open_rom()
+void main_window::open_rom()
 {
-	auto fileName = QFileDialog::getOpenFileName(this,
-		tr("Select ROM File"), "",
+	auto file_name = QFileDialog::getOpenFileName(this,
+		tr("Select ROM File"), _settings.value("open_rom_path", "").toString(),
 		tr("ROM files (*.gb *.gbc *.rom *.bin);;All files (*.*)"));
-	if (fileName.isEmpty())
+	if (file_name.isEmpty())
 		return;
+	_settings.setValue("open_rom_path", file_name);
 
 	std::ifstream in;
-	in.open(fileName.toStdString(), std::ios::binary);
+	in.open(file_name.toStdString(), std::ios::binary);
 	std::vector<uint8_t> bytes;
 	while (in.good())
 	{
@@ -60,7 +67,32 @@ void gameboy_ui::open_rom()
 	update_rom_info();
 }
 
-void gameboy_ui::update_rom_info()
+void main_window::play()
+{
+	if (_game_window)
+	{
+		_game_window->setFocus(Qt::ActiveWindowFocusReason);
+	}
+	else
+	{
+		_ui.loadRomPushButton->setEnabled(false);
+		_ui.playPushButton->setEnabled(false);
+
+		_game_window = new game_window(*_rom);
+		_game_window->setAttribute(Qt::WA_DeleteOnClose);
+		connect(_game_window, SIGNAL(destroyed()), this, SLOT(set_game_window_null()));
+		_game_window->show();
+	}
+}
+
+void main_window::set_game_window_null()
+{
+	_game_window = nullptr;
+	_ui.loadRomPushButton->setEnabled(true);
+	_ui.playPushButton->setEnabled(true);
+}
+
+void main_window::update_rom_info()
 {
 	if (_rom == nullptr)
 	{
