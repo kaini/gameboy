@@ -13,9 +13,6 @@ public:
 	game_window(gb::rom rom, QWidget *parent = 0);
 	~game_window();
 
-public slots:
-	void update_image();
-
 protected:
 	void paintEvent(QPaintEvent *event) override;
 

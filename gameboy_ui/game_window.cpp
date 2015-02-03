@@ -11,7 +11,7 @@ game_window::game_window(gb::rom rom, QWidget *parent) :
 	auto _refresh_timer = new QTimer(this);
 	_refresh_timer->setInterval(1000 / 60 / 2);  // TODO better method for this?
 	_refresh_timer->setSingleShot(false);
-	connect(_refresh_timer, SIGNAL(timeout()), this, SLOT(update_image()));
+	connect(_refresh_timer, SIGNAL(timeout()), this, SLOT(update()));
 
 	_thread.start(std::move(rom));
 	_refresh_timer->start();
@@ -19,12 +19,6 @@ game_window::game_window(gb::rom rom, QWidget *parent) :
 
 game_window::~game_window()
 {
-}
-
-void game_window::update_image()
-{
-	// TODO check for errors in the thread
-	update();
 }
 
 void game_window::paintEvent(QPaintEvent *)
