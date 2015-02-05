@@ -124,6 +124,9 @@ public:
 	bool double_speed() const { return _double_speed; }
 	void stop();
 
+	/** DMA. */
+	void set_dma_mode(bool dma) { _memory.set_dma_mode(dma); }
+
 private:
 	register_file _registers;
 	uint8_t _value8;

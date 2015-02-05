@@ -6,6 +6,11 @@
 
 uint8_t gb::memory::read8(uint16_t addr) const
 {
+	if (_dma_mode && !(0xFF80 <= addr && addr <= 0xFFFE))
+	{
+		debug("WARNING: memory read to non-high-ram while DMA transfer");
+	}
+
 	for (const auto &m : _mappings)
 	{
 		uint8_t value;
@@ -21,6 +26,12 @@ uint8_t gb::memory::read8(uint16_t addr) const
 
 void gb::memory::write8(uint16_t addr, uint8_t value)
 {
+	if (_dma_mode && !(0xFF80 <= addr && addr <= 0xFFFE))
+	{
+		debug("WARNING: memory write to non-high-ram while DMA transfer ignored");
+		// TODO return;
+	}
+
 	for (const auto &m : _mappings)
 	{
 		if (m->write8(addr, value))

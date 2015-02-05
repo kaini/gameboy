@@ -4,10 +4,12 @@
 #include "rom.hpp"
 #include "cart_rom_only.hpp"
 #include "cart_mbc1.hpp"
+#include "cart_mbc5.hpp"
 #include "internal_ram.hpp"
 #include "video.hpp"
 #include "timer.hpp"
 #include "joypad.hpp"
+#include "sound.hpp"
 #include <cstdlib>
 #include <vector>
 #include <fstream>
@@ -73,6 +75,9 @@ void gb::gb_thread::run(gb::rom rom)
 	case 0x01:
 		cartridge = std::make_unique<gb::cart_mbc1>(std::move(rom));
 		break;
+	case 0x19:
+		cartridge = std::make_unique<gb::cart_mbc5>(std::move(rom));
+		break;
 	default:
 		return;
 	}
@@ -82,6 +87,7 @@ void gb::gb_thread::run(gb::rom rom)
 	gb::video video;
 	gb::timer timer;
 	gb::joypad joypad;
+	gb::sound sound;
 
 	// Make Memory
 	gb::memory memory;
@@ -90,6 +96,7 @@ void gb::gb_thread::run(gb::rom rom)
 	memory.add_mapping(&video);
 	memory.add_mapping(&joypad);
 	memory.add_mapping(&timer);
+	memory.add_mapping(&sound);
 	memory.write8(0xff05, 0x00);
 	memory.write8(0xff06, 0x00);
 	memory.write8(0xff07, 0x00);

@@ -880,9 +880,11 @@ class opcode_hang : public gb::opcode
 public:
 	opcode_hang() : gb::opcode("HANG", 0, 0) {}
 	
-	void execute(gb::z80_cpu &) const override
+	void execute(gb::z80_cpu &cpu) const override
 	{
-		debug("WARNING: Game used invalid opcode, ignoring (GB would hang)");
+		debug("WARNING: Game used invalid opcode, hang");
+		cpu.set_ime(false);
+		cpu.registers().write16<r16::pc>(cpu.registers().read16<r16::pc>() - 1);
 	}
 };
 

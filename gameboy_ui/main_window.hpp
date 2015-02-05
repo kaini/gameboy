@@ -25,6 +25,7 @@ private slots:
 	void set_game_window_null();
 
 private:
+	void load_rom(const std::string &path, bool show_error);
 	void update_rom_info();
 
 	QSettings _settings;

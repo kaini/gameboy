@@ -12,6 +12,7 @@ class video final : public memory_mapping
 public:
 	static const int width = 160;
 	static const int height = 144;
+	static const double dma_time;
 	using raw_image = std::array<std::array<std::array<uint8_t, 3>, width>, height>;
 	static_assert(sizeof(raw_image) == 3 * width * height, "raw_image has the wrong size");
 
@@ -132,6 +133,10 @@ private:
 	double _mode_time;
 	double _vblank_ly_time;
 	int _hblanks;
+
+	bool _dma_starting;
+	bool _dma_running;
+	double _dma_time_elapsed;
 };
 
 }

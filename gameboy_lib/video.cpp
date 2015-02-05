@@ -1,13 +1,19 @@
 #include "video.hpp"
 #include "debug.hpp"
 #include "z80.hpp"
+#include "bits.hpp"
 #include <algorithm>
+
+const double gb::video::dma_time = 160000;
 
 gb::video::video() :
 	_vram_bank(0),
 	_mode_time(0),
 	_hblanks(0),
-	_check_ly(false)
+	_check_ly(false),
+	_dma_starting(false),
+	_dma_running(false),
+	_dma_time_elapsed(0)
 {
 	std::fill(_registers.begin(), _registers.end(), 0);
 	for (size_t i = 0; i < _vram.size(); ++i)
@@ -17,11 +23,7 @@ gb::video::video() :
 	std::fill(_obp.begin(), _obp.end(), 0);
 	for (auto &row : _image)
 		for (auto &col : row)
-		{
-			col[0] = 0xFF;
-			col[1] = 0xFF;
-			col[2] = 0xFF;
-		}
+			std::fill(col.begin(), col.end(), 0xFF);
 
 	// starting mode
 	access_register(r::stat) = mode::vblank;
@@ -72,7 +74,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 		{
 			debug("WARNING: write in VRAM during mode 3");
 		}
-		//else
+		// TODO else
 		{
 			_vram[_vram_bank][addr - 0x8000] = value;
 		}
@@ -84,7 +86,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 		{
 			debug("WARNING: write in OAM during mode 2 or 3");
 		}
-		//else
+		// TODO else
 		{
 			_sprite_attribs[addr - 0xFE00] = value;
 		}
@@ -103,7 +105,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 			{
 				debug("WARNING: write to BGP in mode 3");
 			}
-			else
+			// TODO else
 			{
 				uint8_t r = access_register(r::bgpi);
 				_bgp[r & 0x3F] = value;
@@ -117,7 +119,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 			{
 				debug("WARNING: write to OBP in mode 3");
 			}
-			else
+			// TODO else
 			{
 				uint8_t r = access_register(r::obpi);
 				_obp[r & 0x3F] = value;
@@ -133,18 +135,23 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 			break;
 		case r::ly:
 			// LY is read only
+			debug("WARNING: write to read only register LY ignored");
 			break;
 		case r::lyc:
 			access_register(r::lyc) = value;
 			_check_ly = true;
 			break;
 		case r::dma:
+			access_register(addr) = value;
+			_dma_starting = true;
+			break;
 		case r::hdma1:
 		case r::hdma2:
 		case r::hdma3:
 		case r::hdma4:
 		case r::hdma5:
-			break;  // TODO DMA
+			debug("HDMA not implemented");
+			break;  // TODO HDMA
 		default:
 			access_register(addr) = value;
 			break;
@@ -177,7 +184,38 @@ const uint8_t &gb::video::access_register(uint16_t addr) const
 }
 
 void gb::video::tick(gb::z80_cpu &cpu, double ns)
-{
+{	
+	if (_dma_running)
+	{
+		_dma_time_elapsed += ns;
+		if (_dma_time_elapsed >= dma_time / (cpu.double_speed() ? 2 : 1))
+		{
+			_dma_running = false;
+			cpu.set_dma_mode(false);
+		}
+	}
+
+	if (_dma_starting)
+	{
+		_dma_starting = false;
+		if (access_register(r::dma) > 0xF1)
+		{
+			debug("WARNING: DMA transfer starting from invalid memory region ignored");
+		}
+		else
+		{
+			uint16_t start_addr = access_register(r::dma) << 8;
+			for (uint16_t i = 0; i < 0xA0; ++i)
+			{
+				cpu.memory().write8(0xFE00 + i, cpu.memory().read8(start_addr + i));
+			}
+
+			_dma_running = true;
+			_dma_time_elapsed = 0;
+			cpu.set_dma_mode(true);
+		}
+	}
+
 	if ((access_register(r::lcdc) & lcdc_flag::lcd_enable) == 0)
 	{
 		access_register(r::stat) &= ~(stat_flag::mode | stat_flag::coincidence);
@@ -252,6 +290,10 @@ void gb::video::tick(gb::z80_cpu &cpu, double ns)
 		switch (next_mode)
 		{
 		case mode::read_oam:
+			if (bit::test(access_register(r::stat), stat_flag::oam_int))
+			{
+				cpu.post_interrupt(interrupt::lcdc);
+			}
 			if (current_mode == mode::vblank)
 			{
 				_hblanks = 0;
@@ -265,13 +307,18 @@ void gb::video::tick(gb::z80_cpu &cpu, double ns)
 		case mode::read_vram:
 			break;
 		case mode::hblank:
-			if ((access_register(r::stat) & stat_flag::hblank_int) != 0)
+			if (bit::test(access_register(r::stat), stat_flag::hblank_int))
+			{
 				cpu.post_interrupt(interrupt::lcdc);
+			}
 			draw_line(access_register(r::ly));
 			break;
 		case mode::vblank:
-			if ((access_register(r::stat) & stat_flag::vblank_int) != 0)
-				cpu.post_interrupt(interrupt::vblank);
+			if (bit::test(access_register(r::stat), stat_flag::vblank_int))
+			{
+				cpu.post_interrupt(interrupt::lcdc);
+			}
+			cpu.post_interrupt(interrupt::vblank);
 			_vblank_ly_time = 0;
 			break;
 		}
@@ -279,8 +326,6 @@ void gb::video::tick(gb::z80_cpu &cpu, double ns)
 		access_register(r::stat) &= ~0x03;
 		access_register(r::stat) |= next_mode;
 	}
-
-	// TODO oam interrupt?
 }
 
 void gb::video::draw_line(const int y)
@@ -359,11 +404,6 @@ const uint8_t *gb::video::get_bg_tile(uint8_t bank, uint8_t idx) const
 	}
 }
 
-static uint8_t map_color(double c, double n)
-{
-	return static_cast<uint8_t>((c + n)/ 2.0 * 255.0);
-}
-
 const std::array<uint8_t, 3> gb::video::get_bg_color(size_t bgp_idx, size_t color_idx) const
 {
 	const auto color_ptr = &_bgp[bgp_idx * 8 + color_idx * 2];
@@ -377,6 +417,6 @@ const std::array<uint8_t, 3> gb::video::get_bg_color(size_t bgp_idx, size_t colo
 	double b = (color_ptr[1] & 0x7C) >> 2;
 	b = b / 0x1F;
 
-	return {map_color(r, 0.6), map_color(g, 0.6), map_color(b, 0.6)};
+	return {r * 255, g * 255, b * 255};
 }
 

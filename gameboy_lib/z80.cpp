@@ -82,7 +82,7 @@ gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
 	_value8(0xFF),
 	_value16(0xFFFF),
 	_memory(std::move(memory)),
-	_ime(true),
+	_ime(false),
 	_halted(false),
 	_double_speed(false)
 {
@@ -95,9 +95,13 @@ double gb::z80_cpu::tick()
 	if (_ime)
 	{
 		uint8_t if_ = _memory.read8(internal_ram::if_);
-		if (if_ & 0x1F)
+		const uint8_t ie = _memory.read8(internal_ram::ie);
+		if (if_ & ie)
 		{
-			uint8_t ie = _memory.read8(internal_ram::ie);
+#if 0
+			debug("Interrupt!");
+#endif
+
 			uint16_t pc = _registers.read16<register16::pc>();
 			uint16_t sp = _registers.read16<register16::sp>();
 			sp -= 2;
