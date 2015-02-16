@@ -11,10 +11,10 @@
 #include "joypad.hpp"
 #include "sound.hpp"
 #include "debug.hpp"
+#include "assert.hpp"
 #include <cstdlib>
 #include <vector>
 #include <fstream>
-#include <cassert>
 #include <memory>
 #include <chrono>
 
@@ -36,7 +36,7 @@ gb::gb_thread::~gb_thread()
 
 void gb::gb_thread::start(gb::rom rom)
 {
-	assert(!_running);
+	ASSERT(!_running);
 	_running = true;
 	_thread = std::thread(&gb_thread::run, this, std::move(rom));
 }

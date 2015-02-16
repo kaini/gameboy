@@ -2,7 +2,7 @@
 #include "z80opcodes.hpp"
 #include "internal_ram.hpp"
 #include "debug.hpp"
-#include <cassert>
+#include "assert.hpp"
 #include <string>
 #include <vector>
 #include <iomanip>
@@ -32,8 +32,7 @@ std::string gb::to_string(register8 r)
 	case register8::l:
 		return "L";
 	default:
-		assert(false);
-		return {};
+		ASSERT_UNREACHABLE();
 	}
 }
 
@@ -54,8 +53,7 @@ std::string gb::to_string(register16 r)
 	case register16::pc:
 		return "PC";
 	default:
-		assert(false);
-		return {};
+		ASSERT_UNREACHABLE();
 	}
 }
 
@@ -149,8 +147,7 @@ std::chrono::nanoseconds gb::z80_cpu::tick()
 		break;
 	}
 	default:
-		assert(false && "op.extra_bytes > 2");
-		return std::chrono::nanoseconds(0);
+		ASSERT_UNREACHABLE();
 	}
 
 	_registers.write16<register16::pc>(pc);

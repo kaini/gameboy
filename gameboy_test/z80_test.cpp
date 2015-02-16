@@ -1,7 +1,6 @@
 #include "z80.hpp"
 #include <array>
 #include <vector>
-#include <cassert>
 #include <boost/test/unit_test.hpp>
 #include <unordered_set>
 #include <cstdio>

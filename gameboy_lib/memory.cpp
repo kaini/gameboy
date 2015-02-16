@@ -1,7 +1,6 @@
 #include "memory.hpp"
 #include "debug.hpp"
 #include <algorithm>
-#include <cassert>
 #include <iomanip>
 
 uint8_t gb::memory::read8(uint16_t addr) const

@@ -2,8 +2,8 @@
 #include "z80opcodes.hpp"
 #include "z80.hpp"
 #include "debug.hpp"
+#include "assert.hpp"
 #include <string>
-#include <cassert>
 
 using r8 = gb::register8;
 using r16 = gb::register16;
@@ -46,8 +46,7 @@ std::string to_string(operation op)
 	case operation::cp:
 		return "CP";
 	default:
-		assert(false);
-		return {};
+		ASSERT_UNREACHABLE();
 	}
 }
 
@@ -126,8 +125,7 @@ uint8_t execute_alu(operation op, uint8_t dst, uint8_t src, gb::register_file &r
 		return dst;  // throw away subtraction result
 	}
 	default:
-		assert(false);
-		return 0;
+		ASSERT_UNREACHABLE();
 	}
 }
 
@@ -151,8 +149,7 @@ std::string to_string(cond c)
 	case cond::c:
 		return "C";
 	default:
-		assert(false);
-		return {};
+		ASSERT_UNREACHABLE();
 	}
 }
 
@@ -173,8 +170,7 @@ bool check_condition(const gb::z80_cpu &cpu, cond c)
 	case cond::c:
 		return rs.get<flag::c>();
 	default:
-		assert(false);
-		return false;
+		ASSERT_UNREACHABLE();
 	}
 }
 
