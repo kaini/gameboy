@@ -1,4 +1,3 @@
-#define BOOST_TEST_MODULE z80 test
 #include "z80.hpp"
 #include <array>
 #include <vector>

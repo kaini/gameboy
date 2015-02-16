@@ -8,8 +8,8 @@
 #include <iomanip>
 #include <algorithm>
 
-const double gb::z80_cpu::clock_ns = 238.4185791015625;  // 1000000000 / 4194304
-const double gb::z80_cpu::clock_fast_ns = 119.20928955078125;  // 1000000000 / 4194304 / 2
+const std::chrono::nanoseconds gb::z80_cpu::clock(238); // 238.4185791015625 = 1000000000 / 4194304
+const std::chrono::nanoseconds gb::z80_cpu::clock_fast(119); // 119.20928955078125 = 1000000000 / 4194304 / 2
 
 std::string gb::to_string(register8 r)
 {
@@ -89,7 +89,7 @@ gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
 	_memory.add_mapping(this);
 }
 
-double gb::z80_cpu::tick()
+std::chrono::nanoseconds gb::z80_cpu::tick()
 {
 	// interrupts
 	if (_ime)
@@ -126,7 +126,7 @@ double gb::z80_cpu::tick()
 
 	if (_halted)
 	{
-		return 4 * clock_ns;
+		return 4 * clock;
 	}
 
 	// fetch & decode
@@ -150,7 +150,7 @@ double gb::z80_cpu::tick()
 	}
 	default:
 		assert(false && "op.extra_bytes > 2");
-		return 0;
+		return std::chrono::nanoseconds(0);
 	}
 
 	_registers.write16<register16::pc>(pc);
@@ -178,7 +178,7 @@ double gb::z80_cpu::tick()
 #endif
 
 	// "real" time spent
-	return (_double_speed ? clock_fast_ns : clock_ns) * op->cycles();
+	return (_double_speed ? clock_fast : clock) * op->cycles();
 }
 
 void gb::z80_cpu::post_interrupt(interrupt interrupt)

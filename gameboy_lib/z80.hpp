@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <memory>
+#include <chrono>
 
 namespace gb
 {
@@ -102,11 +103,11 @@ class z80_cpu : private memory_mapping
 public:
 	static const uint16_t key1 = 0xFF4D;
 
-	static const double clock_ns;
-	static const double clock_fast_ns;
+	static const std::chrono::nanoseconds clock;
+	static const std::chrono::nanoseconds clock_fast;
 
 	z80_cpu(memory memory, register_file registers);
-	double tick();
+	std::chrono::nanoseconds tick();
 
 	register_file &registers() { return _registers; }
 	const register_file &registers() const { return _registers; }

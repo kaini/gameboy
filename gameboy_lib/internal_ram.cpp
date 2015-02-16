@@ -18,7 +18,7 @@ bool gb::internal_ram::read8(uint16_t addr, uint8_t &value) const
 	}
 	else if (0xD000 <= addr && addr < 0xE000)
 	{
-		value = _ram[addr - 0xC000 + _bank * 0x1000];
+		value = _ram[addr - 0xD000 + _bank * 0x1000];
 		return true;
 	}
 	else if (0xE000 <= addr && addr < 0xFE00)
@@ -53,7 +53,7 @@ bool gb::internal_ram::write8(uint16_t addr, uint8_t value)
 	}
 	else if (0xD000 <= addr && addr < 0xE000)
 	{
-		_ram[addr - 0xC000 + _bank * 0x1000] = value;
+		_ram[addr - 0xD000 + _bank * 0x1000] = value;
 		return true;
 	}
 	else if (0xE000 <= addr && addr < 0xFE00)

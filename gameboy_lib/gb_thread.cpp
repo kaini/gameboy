@@ -10,20 +10,28 @@
 #include "timer.hpp"
 #include "joypad.hpp"
 #include "sound.hpp"
+#include "debug.hpp"
 #include <cstdlib>
 #include <vector>
 #include <fstream>
 #include <cassert>
 #include <memory>
+#include <chrono>
+
+namespace
+{
+class stop_exception {};
+}
 
 gb::gb_thread::gb_thread() :
-	_running(false), _finished(false), _want_stop(false), _got_image(true)
+	_running(false)
 {
 }
 
 gb::gb_thread::~gb_thread()
 {
-	stop();
+	post_stop();
+	join();
 }
 
 void gb::gb_thread::start(gb::rom rom)
@@ -33,37 +41,46 @@ void gb::gb_thread::start(gb::rom rom)
 	_thread = std::thread(&gb_thread::run, this, std::move(rom));
 }
 
-void gb::gb_thread::stop()
+void gb::gb_thread::join()
 {
 	if (_running)
 	{
-		_want_stop = true;
 		_thread.join();
 	}
 }
 
-std::unique_ptr<gb::video::raw_image> gb::gb_thread::fetch_image()
+void gb::gb_thread::post_stop()
 {
-	std::unique_lock<std::mutex> lock(_mutex);
-	_got_image = false;
-	_got_image_cv.wait(lock, [this] { return _got_image || _finished; });
-	return std::move(_image);
+	command fn([] (video &){ 
+		throw stop_exception();
+	});
+
+	std::lock_guard<std::mutex> lock(_mutex);
+	_command_queue.emplace_back(std::move(fn));
+}
+
+std::future<gb::video::raw_image> gb::gb_thread::post_get_image()
+{
+	auto promise = std::make_shared<std::promise<video::raw_image>>();
+	auto future = promise->get_future();
+	command fn([promise] (video &video) {
+		promise->set_value(video.image());
+	});
+
+	std::lock_guard<std::mutex> lock(_mutex);
+	_command_queue.emplace_back(std::move(fn));
+	return future;
 }
 
 void gb::gb_thread::run(gb::rom rom)
 {
-	// Set the finished flag in all cases!
-	struct set_finished
-	{
-		gb_thread *that;
-		set_finished(gb_thread *that) : that(that) {}
-		~set_finished()
-		{
-			std::lock_guard<std::mutex> lock(that->_mutex);
-			that->_finished = true;
-			that->_got_image_cv.notify_all();
-		}
-	} set_finished(this);
+	using namespace std::chrono;
+
+	using clock = steady_clock;
+	static_assert(clock::is_monotonic, "clock not monotonic");
+	static_assert(clock::is_steady, "clock not steady");
+	static_assert(std::ratio_less_equal<clock::period, std::ratio_multiply<std::ratio<100>, std::nano>>::value,
+		"clock too inaccurate (period > 100ns)");
 
 	// Make Cartridge
 	std::unique_ptr<gb::memory_mapping> cartridge;
@@ -143,24 +160,64 @@ void gb::gb_thread::run(gb::rom rom)
 	gb::z80_cpu cpu(std::move(memory), std::move(registers));
 
 	// Let's go :)
-	while (!_want_stop)
+	std::vector<command> current_commands;
+	nanoseconds real_time(0);
+	nanoseconds gb_time(0);
+	auto last_real_time = clock::now();
+
+	try
 	{
-		double ns = cpu.tick();
-		video.tick(cpu, ns);
-		timer.tick(cpu, ns);
-
+		while (true)
 		{
-			std::lock_guard<std::mutex> lock(_mutex);
-			if (!_got_image)
 			{
-				if (video.is_enabled())
-					_image = std::make_unique<video::raw_image>(video.image());
-				else
-					_image = nullptr;
+				std::lock_guard<std::mutex> lock(_mutex);
+				if (!_command_queue.empty())
+				{
+					std::swap(current_commands, _command_queue);
+				}
+			}
 
-				_got_image = true;
-				_got_image_cv.notify_one();
+			if (!current_commands.empty())
+			{
+				for (const auto &command : current_commands)
+				{
+					command(video);
+				}
+				current_commands.clear();
+			}
+
+			auto ns = cpu.tick();
+			video.tick(cpu, ns);
+			timer.tick(cpu, ns);
+
+			// Time bookkeeping
+			gb_time += ns;
+			auto current_time = clock::now();
+			real_time += (current_time - last_real_time);
+			last_real_time = current_time;
+
+			auto min_time = std::min(gb_time, real_time);
+			gb_time -= min_time;
+			real_time -= min_time;
+			
+			if (gb_time > nanoseconds(0))
+			{
+				// simulation is too fast
+				if (gb_time > milliseconds(15))
+				{
+					std::this_thread::sleep_for(gb_time);
+				}
+			}
+			else if (real_time > milliseconds(100))
+			{
+				// simulation is too slow (reset counter)
+				debug("simulation is too slow!");
+				real_time = nanoseconds(0);
 			}
 		}
+	}
+	catch (const stop_exception &)
+	{
+		// this might be ugly but it works well :)
 	}
 }

@@ -1,11 +1,11 @@
 #include "timer.hpp"
 #include "z80.hpp"
 
-const double gb::timer::tick_ns = 61035.15625;
-const double gb::timer::tima_0_ns = 244140.625;
-const double gb::timer::tima_1_ns = 3814.697265625; 
-const double gb::timer::tima_2_ns = 15258.7890625;
-const double gb::timer::tima_3_ns = 61035.15625;
+const std::chrono::nanoseconds gb::timer::tick_ns(61035); // 61035.15625;
+const std::chrono::nanoseconds gb::timer::tima_0_ns(244141); // 244140.625;
+const std::chrono::nanoseconds gb::timer::tima_1_ns(3815); // 3814.697265625; 
+const std::chrono::nanoseconds gb::timer::tima_2_ns(15259); // 15258.7890625;
+const std::chrono::nanoseconds gb::timer::tima_3_ns(61035); // 61035.15625;
 
 gb::timer::timer() :
 	_div(0), _tima(0), _tma(0), _tac(0), _last_div_increment(0), _last_tima_increment(0)
@@ -54,9 +54,11 @@ bool gb::timer::write8(uint16_t addr, uint8_t value)
 	}
 }
 
-void gb::timer::tick(z80_cpu &cpu, double ns)
+void gb::timer::tick(z80_cpu &cpu, std::chrono::nanoseconds ns)
 {
-	double div_increment_at = tick_ns;
+	using namespace std::chrono;
+
+	auto div_increment_at = tick_ns;
 	if (cpu.double_speed())
 		div_increment_at /= 2;
 
@@ -69,7 +71,7 @@ void gb::timer::tick(z80_cpu &cpu, double ns)
 
 	if (_tac & 0x04)
 	{
-		double tima_increment_at;
+		nanoseconds tima_increment_at;
 		switch (_tac & 0x03)
 		{
 		case 0:

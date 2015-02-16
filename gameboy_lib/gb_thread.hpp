@@ -5,6 +5,8 @@
 #include <atomic>
 #include <condition_variable>
 #include <memory>
+#include <vector>
+#include <future>
 
 namespace gb
 {
@@ -17,24 +19,23 @@ public:
 
 	/** Starts the thread. */
 	void start(gb::rom rom);
-	/** Stops the thread. */
-	void stop();
+	/** Joins the thread. */
+	void join();
 
-	/** Returns a copy of the current video controller state. */
-	std::unique_ptr<video::raw_image> fetch_image();
+	/** Posts a request to stop the thread. */
+	void post_stop();
+	/** Posts a request to get the current image. */
+	std::future<video::raw_image> post_get_image();
 
 private:
 	void run(gb::rom rom);
 
 	bool _running;
-	bool _finished;
-	std::atomic<bool> _want_stop;
 	std::thread _thread;
-	std::mutex _mutex;
 
-	std::condition_variable _got_image_cv;
-	bool _got_image;
-	std::unique_ptr<video::raw_image> _image;
+	using command = std::function<void (video &)>;
+	std::mutex _mutex;
+	std::vector<command> _command_queue;
 };
 
 }
