@@ -165,11 +165,12 @@ void gb::gb_thread::run(gb::rom rom)
 
 	// Let's go :)
 	std::vector<command> current_commands;
-	nanoseconds real_time(0);
-	nanoseconds gb_time(0);
-	nanoseconds performance_gb_time(0);
+
+	cputime gb_time(0);
+	auto real_time_start = clock::now();
+
+	cputime performance_gb_time(0);
 	nanoseconds performance_sleep_time(0);
-	auto last_real_time = clock::now();
 	auto performance_start = clock::now();
 
 	try
@@ -195,43 +196,42 @@ void gb::gb_thread::run(gb::rom rom)
 			}
 
 			// Simulation itself
-			const auto ns = cpu.tick();
-			video.tick(cpu, ns);
-			timer.tick(cpu, ns);
+			const auto time_fd = cpu.fetch_decode();
+			timer.tick(cpu, time_fd);
+
+			const auto time_ex = cpu.execute();
+			timer.tick(cpu, time_ex);
+
+			const auto time = time_fd + time_ex;
+			video.tick(cpu, time);
 
 			// Time bookkeeping
-			const auto current_time = clock::now();
-			gb_time += ns;
-			real_time += (current_time - last_real_time);
-			last_real_time = current_time;
+			gb_time += time;
+			const auto real_time = clock::now() - real_time_start;
+			const auto drift = duration_cast<nanoseconds>(gb_time) - real_time;
+			if (drift > milliseconds(5))
+			{
+				// Simulation is too fast
+				const auto sleep_start = clock::now();
+				std::this_thread::sleep_for(drift);
+				performance_sleep_time += (clock::now() - sleep_start);
 
-			const auto min_time = std::min(gb_time, real_time);
-			gb_time -= min_time;
-			real_time -= min_time;
-			
-			if (gb_time > nanoseconds(0))
-			{
-				// simulation is too fast
-				if (gb_time > milliseconds(15))
-				{
-					const auto sleep_start = clock::now();
-					std::this_thread::sleep_for(gb_time);
-					performance_sleep_time += (clock::now() - sleep_start);
-				}
-				else if (gb_time > milliseconds(1))
-				{
-					const auto sleep_start = clock::now();
-					std::this_thread::yield();
-					performance_sleep_time += (clock::now() - sleep_start);
-				}
+				const auto new_current_time = clock::now();
+				const auto new_real_time = new_current_time - real_time_start;
+				const auto new_drift = gb_time - duration_cast<cputime>(new_real_time);
+				gb_time = new_drift;
+				real_time_start = new_current_time;
 			}
-			else if (real_time > milliseconds(100))
+			else if (drift < milliseconds(-100))
 			{
-				// simulation is too slow (reset counter)
-				real_time = nanoseconds(0);
+				// Simulation is too slow (reset counter to avoid an endless accumulation of negaitve time)
+				// This is a resync-attempt in case of a spike and avoids underflow
+				gb_time = cputime(0);
+				real_time_start = clock::now();
 			}
 
-			performance_gb_time += ns;
+			// Performance-o-meter
+			performance_gb_time += time;
 			const auto performance_now = clock::now();
 			const auto performance_real_time = performance_now - performance_start;
 			if (performance_real_time > seconds(10))
@@ -242,12 +242,14 @@ void gb::gb_thread::run(gb::rom rom)
 					static_cast<double>(duration_cast<nanoseconds>(performance_gb_time).count()) /
 					static_cast<double>(duration_cast<nanoseconds>(performance_real_time - performance_sleep_time).count()) *
 					100.0;
-				debug("PERF: simulation accuracy is at ", accuracy, " ms");
-				debug("PERF: simulation speed is at ", speed, " %");
-				if (speed < 100.0) {
-					debug("PERF WARNING: simulation performance is too low!");
+				debug("PERF: simulation drift in the last 10 s was ~", accuracy, " ms");
+				debug("PERF: simulation speed in the last 10 s was ", speed, " % of required speed");
+				if (speed < 110.0)
+				{
+					debug("PERF WARNING: simulation speed is too low (< 110 %)");
 				}
-				performance_sleep_time = performance_gb_time = nanoseconds(0);
+				performance_sleep_time = seconds(0);
+				performance_gb_time = cputime(0);
 				performance_start = performance_now;
 			}
 		}

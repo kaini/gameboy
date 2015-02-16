@@ -1,6 +1,8 @@
 #include "game_window.hpp"
 #include <QPainter>
 #include <QTimer>
+#include <z80opcodes.hpp>
+#include <debug.hpp>
 
 game_window::game_window(gb::rom rom, QWidget *parent) :
 	QMainWindow(parent)
@@ -15,6 +17,20 @@ game_window::game_window(gb::rom rom, QWidget *parent) :
 
 	_thread.start(std::move(rom));
 	_refresh_timer->start();
+
+	QString str;
+	QString str2;
+	for (int i = 0; i < 0x100; ++i) {
+		if (i % 0x10 == 0 && i != 0) {
+			str.append("\n");
+			str2.append("\n");
+		}
+		str.append(QString("%1,").arg(gb::opcodes[i].cycles() / 4));
+		str2.append(QString("%1,").arg((gb::opcodes[i].cycles() + gb::opcodes[i].extra_cycles()) / 4));
+	}
+	debug(str.toStdString());
+	debug("");
+	debug(str2.toStdString());
 }
 
 game_window::~game_window()

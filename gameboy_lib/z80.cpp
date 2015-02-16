@@ -8,8 +8,8 @@
 #include <iomanip>
 #include <algorithm>
 
-const std::chrono::nanoseconds gb::z80_cpu::clock(238); // 238.4185791015625 = 1000000000 / 4194304
-const std::chrono::nanoseconds gb::z80_cpu::clock_fast(119); // 119.20928955078125 = 1000000000 / 4194304 / 2
+const gb::cputime gb::z80_cpu::clock(2);       // 1 / 2^22
+const gb::cputime gb::z80_cpu::clock_fast(1);  // 1 / 2^23 == clock / 2
 
 std::string gb::to_string(register8 r)
 {
@@ -77,18 +77,23 @@ void gb::register_file::debug_print() const
 
 gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
 	_registers(registers),
-	_value8(0xFF),
-	_value16(0xFFFF),
 	_memory(std::move(memory)),
 	_ime(false),
 	_halted(false),
-	_double_speed(false)
+	_value8(0xFF),
+	_value16(0xFFFF),
+	_opcode(nullptr),
+	_extra_cycles(false),
+	_double_speed(false),
+	_speed_switch(false)
 {
 	_memory.add_mapping(this);
 }
 
-std::chrono::nanoseconds gb::z80_cpu::tick()
+gb::cputime gb::z80_cpu::fetch_decode()
 {
+	ASSERT(_opcode == nullptr);
+
 	// interrupts
 	if (_ime)
 	{
@@ -124,15 +129,15 @@ std::chrono::nanoseconds gb::z80_cpu::tick()
 
 	if (_halted)
 	{
-		return 4 * clock;
+		return 3 * clock;
 	}
 
 	// fetch & decode
 	uint16_t pc = _registers.read16<register16::pc>();
 	uint8_t opcode = _memory.read8(pc++);
-	const auto &op = opcode == 0xCB ? cb_opcodes[_memory.read8(pc++)] : opcodes[opcode];
+	_opcode = &(opcode == 0xCB ? cb_opcodes[_memory.read8(pc++)] : opcodes[opcode]);
 
-	switch (op.extra_bytes())
+	switch (_opcode->extra_bytes())
 	{
 	case 0:
 		break;
@@ -152,30 +157,50 @@ std::chrono::nanoseconds gb::z80_cpu::tick()
 
 	_registers.write16<register16::pc>(pc);
 
-	// execute
+	return (_opcode->cycles() - 1) * (_double_speed ? clock_fast : clock);
+}
+
+gb::cputime gb::z80_cpu::execute()
+{
+	if (_halted || _opcode == nullptr)
+	{
+		// _opcode is nullptr if we were _halted but between fetch_decode
+		// and execute an interrupt was posted
+		return 1 * clock;
+	}
+
 #if 0
-	switch (op.extra_bytes())
+	switch (_opcode->extra_bytes())
 	{
 	case 0:
-		debug(op.mnemonic());
+		debug(_opcode->mnemonic());
 		break;
 	case 1:
-		debug(op.mnemonic(), "  $=", static_cast<int>(_value8));
+		debug(_opcode->mnemonic(), "  $=", static_cast<int>(_value8));
 		break;
 	case 2:
-		debug(op.mnemonic(), "  $=", static_cast<int>(_value16));
+		debug(_opcode->mnemonic(), "  $=", static_cast<int>(_value16));
 		break;
 	}
 #endif
-	op.execute(*this);
+
+	_opcode->execute(*this);
 
 #if 0
-	// debug
 	_registers.debug_print();
 #endif
 
-	// "real" time spent
-	return (_double_speed ? clock_fast : clock) * op.cycles();
+	cputime time;
+	if (_extra_cycles)
+	{
+		ASSERT(_opcode->extra_cycles() > 0);
+		_extra_cycles = false;
+		time = _opcode->extra_cycles() * (_double_speed ? clock_fast : clock);
+	}
+	time += 1 * (_double_speed ? clock_fast : clock);
+
+	_opcode = nullptr;
+	return time;
 }
 
 void gb::z80_cpu::post_interrupt(interrupt interrupt)

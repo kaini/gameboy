@@ -768,13 +768,14 @@ template <cond Cond>
 class opcode_jp_i : public gb::opcode
 {
 public:
-	opcode_jp_i() : gb::opcode("JP " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 16, &execute) {}
+	opcode_jp_i() : gb::opcode("JP " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 12, &execute, 4) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
 		if (check_condition(cpu, Cond))
 		{
 			cpu.registers().write16<r16::pc>(cpu.value16());
+			cpu.set_executed_extra_cycles();
 		}
 	}
 };
@@ -794,7 +795,7 @@ template <cond Cond>
 class opcode_jr_i : public gb::opcode
 {
 public:
-	opcode_jr_i() : gb::opcode("JR " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 1, 12, &execute) {}
+	opcode_jr_i() : gb::opcode("JR " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 1, 8, &execute, 4) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -802,6 +803,7 @@ public:
 		{
 			cpu.registers().write16<r16::pc>(
 				cpu.registers().read16<r16::pc>() + static_cast<int8_t>(cpu.value8()));
+			cpu.set_executed_extra_cycles();
 		}
 	}
 };
@@ -810,7 +812,7 @@ template <cond Cond>
 class opcode_call : public gb::opcode
 {
 public:
-	opcode_call() : gb::opcode("CALL " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 24, &execute) {}
+	opcode_call() : gb::opcode("CALL " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 12, &execute, 12) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -822,6 +824,7 @@ public:
 			cpu.memory().write16(sp, pc);
 			cpu.registers().write16<r16::pc>(cpu.value16());
 			cpu.registers().write16<r16::sp>(sp);
+			cpu.set_executed_extra_cycles();
 		}
 	}
 };
@@ -847,7 +850,7 @@ template <cond Cond, bool Ei>
 class opcode_ret : public gb::opcode
 {
 public:
-	opcode_ret() : gb::opcode(std::string("RET") + (Ei ? "I" : "") + (Cond == cond::nop ? std::string("") : (" " + to_string(Cond))), 0, 12, &execute) {}
+	opcode_ret() : gb::opcode(std::string("RET") + (Ei ? "I" : "") + (Cond == cond::nop ? std::string("") : (" " + to_string(Cond))), 0, Cond == cond::nop ? 4 : 8, &execute, 12) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -861,6 +864,7 @@ public:
 			sp += 2;
 			cpu.registers().write16<r16::sp>(sp);
 			cpu.registers().write16<r16::pc>(pc);
+			cpu.set_executed_extra_cycles();
 		}
 	}
 };
@@ -868,7 +872,7 @@ public:
 class opcode_hang : public gb::opcode
 {
 public:
-	opcode_hang() : gb::opcode("HANG", 0, 0, &execute) {}
+	opcode_hang() : gb::opcode("HANG", 0, 4, &execute) {}
 	
 	static void execute(gb::z80_cpu &cpu)
 	{

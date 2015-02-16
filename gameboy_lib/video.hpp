@@ -1,7 +1,7 @@
 #pragma once
 #include "memory.hpp"
+#include "time.hpp"
 #include <array>
-#include <chrono>
 
 namespace gb
 {
@@ -13,7 +13,7 @@ class video final : public memory_mapping
 public:
 	static const int width = 160;
 	static const int height = 144;
-	static const std::chrono::nanoseconds dma_time;
+	static const cputime dma_time;
 	using raw_image = std::array<std::array<std::array<uint8_t, 3>, width>, height>;
 	static_assert(sizeof(raw_image) == 3 * width * height, "raw_image has the wrong size");
 
@@ -105,7 +105,7 @@ public:
 	bool read8(uint16_t addr, uint8_t &value) const override;
 	bool write8(uint16_t addr, uint8_t value) override;
 
-	void tick(z80_cpu &cpu, std::chrono::nanoseconds ns);
+	void tick(z80_cpu &cpu, cputime time);
 
 	bool is_enabled() const { return (access_register(r::lcdc) & lcdc_flag::lcd_enable) != 0; }
 	const raw_image &image() const { return _image; }
@@ -131,13 +131,13 @@ private:
 	int _vram_bank;
 
 	raw_image _image;
-	std::chrono::nanoseconds _mode_time;
-	std::chrono::nanoseconds _vblank_ly_time;
+	cputime _mode_time;
+	cputime _vblank_ly_time;
 	int _hblanks;
 
 	bool _dma_starting;
 	bool _dma_running;
-	std::chrono::nanoseconds _dma_time_elapsed;
+	cputime _dma_time_elapsed;
 };
 
 }

@@ -1,6 +1,6 @@
 #pragma once
 #include "memory.hpp"
-#include <chrono>
+#include "time.hpp"
 
 namespace gb
 {
@@ -19,22 +19,21 @@ public:
 	/** Timer control */
 	static const uint16_t tac = 0xFF07;
 
-	static const std::chrono::nanoseconds tick_ns;    // 16384 Hz
-	static const std::chrono::nanoseconds tick_fast_ns;  // 32768 Hz
-	static const std::chrono::nanoseconds tima_0_ns;  // 4096 Hz
-	static const std::chrono::nanoseconds tima_1_ns;  // 262144 Hz
-	static const std::chrono::nanoseconds tima_2_ns;  // 65536 Hz
-	static const std::chrono::nanoseconds tima_3_ns;  // 16384 Hz
+	static const cputime tick_time;       // 16384 Hz
+	static const cputime tima_0_time;     // 4096 Hz
+	static const cputime tima_1_time;     // 262144 Hz
+	static const cputime tima_2_time;     // 65536 Hz
+	static const cputime tima_3_time;     // 16384 Hz
 
 	timer();
 
 	bool read8(uint16_t addr, uint8_t & value) const override;
 	bool write8(uint16_t addr, uint8_t value) override;
-	void tick(z80_cpu &cpu, std::chrono::nanoseconds ns);
+	void tick(z80_cpu &cpu, cputime time);
 
 private:
 	uint8_t _div, _tima, _tma, _tac;
-	std::chrono::nanoseconds _last_div_increment, _last_tima_increment;
+	cputime _last_div_increment, _last_tima_increment;
 };
 
 }

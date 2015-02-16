@@ -1,9 +1,10 @@
 #pragma once
 #include "memory.hpp"
+#include "z80opcodes.hpp"
+#include "time.hpp"
 #include <vector>
 #include <cstdint>
 #include <memory>
-#include <chrono>
 
 namespace gb
 {
@@ -103,18 +104,26 @@ class z80_cpu : private memory_mapping
 public:
 	static const uint16_t key1 = 0xFF4D;
 
-	static const std::chrono::nanoseconds clock;
-	static const std::chrono::nanoseconds clock_fast;
+	static const cputime clock;
+	static const cputime clock_fast;
 
 	z80_cpu(memory memory, register_file registers);
-	std::chrono::nanoseconds tick();
 
+	/** Simulation interface */
+	cputime fetch_decode();
+	cputime execute();
+
+	/** Current CPU state. */
 	register_file &registers() { return _registers; }
 	const register_file &registers() const { return _registers; }
 	gb::memory &memory() { return _memory; }
 	const gb::memory &memory() const { return _memory; }
+
+	/** Current opcode (valid after fetch_decode was called) */
 	uint8_t value8() const { return _value8; }
 	uint16_t value16() const { return _value16; }
+	const opcode *next_opcode() const { return _opcode; }
+	void set_executed_extra_cycles() { _extra_cycles = true; }
 
 	/** Sets or resets the Interrupt Master Enable flag. */
 	void set_ime(bool value) { _ime = value; }
@@ -130,11 +139,14 @@ public:
 
 private:
 	register_file _registers;
-	uint8_t _value8;
-	uint16_t _value16;
 	gb::memory _memory;
 	bool _ime;
 	bool _halted;
+
+	uint8_t _value8;
+	uint16_t _value16;
+	const opcode *_opcode;
+	bool _extra_cycles;
 
 	bool _double_speed;
 	bool _speed_switch;

@@ -4,7 +4,7 @@
 #include "bits.hpp"
 #include <algorithm>
 
-const std::chrono::nanoseconds gb::video::dma_time(160000);
+const gb::cputime gb::video::dma_time(std::chrono::duration_cast<gb::cputime>(std::chrono::microseconds(160)));
 
 gb::video::video() :
 	_vram_bank(0),
@@ -27,7 +27,7 @@ gb::video::video() :
 
 	// starting mode
 	access_register(r::stat) = mode::vblank;
-	_mode_time = std::chrono::nanoseconds(1080000 - 1);
+	_mode_time = cputime(9120 - 1);
 	access_register(r::ly) = 153;
 }
 
@@ -183,13 +183,13 @@ const uint8_t &gb::video::access_register(uint16_t addr) const
 	return _registers[addr - 0xFF40];
 }
 
-void gb::video::tick(gb::z80_cpu &cpu, std::chrono::nanoseconds ns)
+void gb::video::tick(gb::z80_cpu &cpu, cputime time)
 {	
 	using namespace std::chrono;
 
 	if (_dma_running)
 	{
-		_dma_time_elapsed += ns;
+		_dma_time_elapsed += time;
 		if (_dma_time_elapsed >= dma_time / (cpu.double_speed() ? 2 : 1))
 		{
 			_dma_running = false;
@@ -213,7 +213,7 @@ void gb::video::tick(gb::z80_cpu &cpu, std::chrono::nanoseconds ns)
 			}
 
 			_dma_running = true;
-			_dma_time_elapsed = nanoseconds(0);
+			_dma_time_elapsed = cputime(0);
 			cpu.set_dma_mode(true);
 		}
 	}
@@ -222,9 +222,9 @@ void gb::video::tick(gb::z80_cpu &cpu, std::chrono::nanoseconds ns)
 	{
 		access_register(r::stat) &= ~(stat_flag::mode | stat_flag::coincidence);
 		access_register(r::stat) |= mode::vblank;
-		_mode_time = nanoseconds(1080000 - 1);
+		_mode_time = cputime(9120 - 1);
 		_hblanks = 0;
-		_vblank_ly_time = nanoseconds(0);
+		_vblank_ly_time = cputime(0);
 		return;
 	}
 
@@ -236,28 +236,28 @@ void gb::video::tick(gb::z80_cpu &cpu, std::chrono::nanoseconds ns)
 
 	uint8_t current_mode = access_register(r::stat) & stat_flag::mode;
 	uint8_t next_mode = current_mode;
-	_mode_time += ns;
+	_mode_time += time;
 	
 	switch (current_mode)
 	{
 	case mode::read_oam:
-		if (_mode_time > microseconds(19))
+		if (_mode_time > cputime(160))
 		{
-			_mode_time -= microseconds(19);
+			_mode_time -= cputime(160);
 			next_mode = mode::read_vram;
 		}
 		break;
 	case mode::read_vram:
-		if (_mode_time > microseconds(41))
+		if (_mode_time > cputime(344))
 		{
-			_mode_time -= microseconds(41);
+			_mode_time -= cputime(344);
 			next_mode = mode::hblank;
 		}
 		break;
 	case mode::hblank:
-		if (_mode_time > nanoseconds(48600))
+		if (_mode_time > cputime(408))
 		{
-			_mode_time -= nanoseconds(48600);
+			_mode_time -= cputime(408);
 			++_hblanks;
 			if (_hblanks == 144)
 			{
@@ -270,17 +270,17 @@ void gb::video::tick(gb::z80_cpu &cpu, std::chrono::nanoseconds ns)
 		}
 		break;
 	case mode::vblank:
-		if (_mode_time > microseconds(1080))
+		if (_mode_time > cputime(9120))
 		{
-			_mode_time -= microseconds(1080);
+			_mode_time -= cputime(9120);
 			next_mode = mode::read_oam;
 		}
 		else
 		{
-			_vblank_ly_time += ns;
-			if (_vblank_ly_time > nanoseconds(106600))
+			_vblank_ly_time += time;
+			if (_vblank_ly_time > cputime(912))
 			{
-				_vblank_ly_time -= nanoseconds(106600);
+				_vblank_ly_time -= cputime(912);
 				set_ly(cpu, access_register(r::ly) + 1);
 			}
 		}
@@ -321,7 +321,7 @@ void gb::video::tick(gb::z80_cpu &cpu, std::chrono::nanoseconds ns)
 				cpu.post_interrupt(interrupt::lcdc);
 			}
 			cpu.post_interrupt(interrupt::vblank);
-			_vblank_ly_time = nanoseconds(0);
+			_vblank_ly_time = cputime(0);
 			break;
 		}
 

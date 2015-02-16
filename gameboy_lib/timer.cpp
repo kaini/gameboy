@@ -2,12 +2,11 @@
 #include "z80.hpp"
 #include "assert.hpp"
 
-const std::chrono::nanoseconds gb::timer::tick_ns(61035); // 61035.15625;
-const std::chrono::nanoseconds gb::timer::tick_fast_ns(30518); // 30517.578125;
-const std::chrono::nanoseconds gb::timer::tima_0_ns(244141); // 244140.625;
-const std::chrono::nanoseconds gb::timer::tima_1_ns(3815); // 3814.697265625; 
-const std::chrono::nanoseconds gb::timer::tima_2_ns(15259); // 15258.7890625;
-const std::chrono::nanoseconds gb::timer::tima_3_ns(61035); // 61035.15625;
+const gb::cputime gb::timer::tick_time(512);     // 1 / 2^14 == 1 / 2^23 * 2^9
+const gb::cputime gb::timer::tima_0_time(2048);  // 1 / 2^12 == 1 / 2^23 * 2^11
+const gb::cputime gb::timer::tima_1_time(32);    // 1 / 2^18 == 1 / 2^23 * 2^5
+const gb::cputime gb::timer::tima_2_time(128);   // 1 / 2^16 == 1 / 2^23 * 2^7
+const gb::cputime gb::timer::tima_3_time(512);   // 1 / 2^14 == 1 / 2^23 * 2^9
 
 gb::timer::timer() :
 	_div(0), _tima(0), _tma(0), _tac(0), _last_div_increment(0), _last_tima_increment(0)
@@ -56,12 +55,14 @@ bool gb::timer::write8(uint16_t addr, uint8_t value)
 	}
 }
 
-void gb::timer::tick(z80_cpu &cpu, std::chrono::nanoseconds ns)
+void gb::timer::tick(z80_cpu &cpu, cputime time)
 {
 	using namespace std::chrono;
 
-	const auto div_increment_at = cpu.double_speed() ? tick_fast_ns : tick_ns;
-	_last_div_increment += ns;
+	auto div_increment_at = tick_time;
+	if (cpu.double_speed())
+		div_increment_at /= 2;
+	_last_div_increment += time;
 	while (_last_div_increment >= div_increment_at)
 	{
 		++_div;
@@ -70,26 +71,28 @@ void gb::timer::tick(z80_cpu &cpu, std::chrono::nanoseconds ns)
 
 	if (_tac & 0x04)
 	{
-		nanoseconds tima_increment_at;
+		cputime tima_increment_at;
 		switch (_tac & 0x03)
 		{
 		case 0:
-			tima_increment_at = tima_0_ns;  // 4096 Hz
+			tima_increment_at = tima_0_time;  // 4096 Hz
 			break;
 		case 1:
-			tima_increment_at = tima_1_ns;  // 262144 Hz
+			tima_increment_at = tima_1_time;  // 262144 Hz
 			break;
 		case 2:
-			tima_increment_at = tima_2_ns;  // 65536 Hz
+			tima_increment_at = tima_2_time;  // 65536 Hz
 			break;
 		case 3:
-			tima_increment_at = tima_3_ns;  // 16384 Hz
+			tima_increment_at = tima_3_time;  // 16384 Hz
 			break;
 		default:
 			ASSERT_UNREACHABLE();
 		}
+		if (cpu.double_speed())
+			tima_increment_at /= 2;
 
-		_last_tima_increment += ns;
+		_last_tima_increment += time;
 		while (_last_tima_increment >= tima_increment_at)
 		{
 			++_tima;
