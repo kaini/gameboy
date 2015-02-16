@@ -61,6 +61,7 @@ void gb::gb_thread::post_stop()
 
 std::future<gb::video::raw_image> gb::gb_thread::post_get_image()
 {
+	// TODO use capture by move (Visual Studio 2015/C++14)
 	auto promise = std::make_shared<std::promise<video::raw_image>>();
 	auto future = promise->get_future();
 	command fn([promise] (video &video) {
@@ -163,12 +164,16 @@ void gb::gb_thread::run(gb::rom rom)
 	std::vector<command> current_commands;
 	nanoseconds real_time(0);
 	nanoseconds gb_time(0);
+	nanoseconds performance_gb_time(0);
+	nanoseconds performance_sleep_time(0);
 	auto last_real_time = clock::now();
+	auto performance_start = clock::now();
 
 	try
 	{
 		while (true)
 		{
+			// Command stream
 			{
 				std::lock_guard<std::mutex> lock(_mutex);
 				if (!_command_queue.empty())
@@ -186,17 +191,18 @@ void gb::gb_thread::run(gb::rom rom)
 				current_commands.clear();
 			}
 
-			auto ns = cpu.tick();
+			// Simulation itself
+			const auto ns = cpu.tick();
 			video.tick(cpu, ns);
 			timer.tick(cpu, ns);
 
 			// Time bookkeeping
+			const auto current_time = clock::now();
 			gb_time += ns;
-			auto current_time = clock::now();
 			real_time += (current_time - last_real_time);
 			last_real_time = current_time;
 
-			auto min_time = std::min(gb_time, real_time);
+			const auto min_time = std::min(gb_time, real_time);
 			gb_time -= min_time;
 			real_time -= min_time;
 			
@@ -205,14 +211,41 @@ void gb::gb_thread::run(gb::rom rom)
 				// simulation is too fast
 				if (gb_time > milliseconds(15))
 				{
+					const auto sleep_start = clock::now();
 					std::this_thread::sleep_for(gb_time);
+					performance_sleep_time += (clock::now() - sleep_start);
+				}
+				else if (gb_time > milliseconds(1))
+				{
+					const auto sleep_start = clock::now();
+					std::this_thread::yield();
+					performance_sleep_time += (clock::now() - sleep_start);
 				}
 			}
 			else if (real_time > milliseconds(100))
 			{
 				// simulation is too slow (reset counter)
-				debug("simulation is too slow!");
 				real_time = nanoseconds(0);
+			}
+
+			performance_gb_time += ns;
+			const auto performance_now = clock::now();
+			const auto performance_real_time = performance_now - performance_start;
+			if (performance_real_time > seconds(10))
+			{
+				const auto accuracy =
+					duration_cast<milliseconds>(performance_gb_time - performance_real_time).count();
+				const double speed =
+					static_cast<double>(duration_cast<nanoseconds>(performance_gb_time).count()) /
+					static_cast<double>(duration_cast<nanoseconds>(performance_real_time - performance_sleep_time).count()) *
+					100.0;
+				debug("PERF: simulation accuracy is at ", accuracy, " ms");
+				debug("PERF: simulation speed is at ", speed, " %");
+				if (speed < 100.0) {
+					debug("PERF WARNING: simulation performance is too low!");
+				}
+				performance_sleep_time = performance_gb_time = nanoseconds(0);
+				performance_start = performance_now;
 			}
 		}
 	}
