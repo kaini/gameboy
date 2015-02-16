@@ -4,19 +4,13 @@
 #include "debug.hpp"
 #include <string>
 #include <cassert>
-#include <mutex>
-
-namespace
-{
 
 using r8 = gb::register8;
 using r16 = gb::register16;
 using flag = gb::cpu_flag;
 
-std::once_flag opcodes_table_once;
-gb::opcode_table opcodes_table;
-std::once_flag cb_opcodes_table_once;
-gb::opcode_table cb_opcodes_table;
+namespace
+{
 
 uint16_t sign_extend(uint8_t param)
 {
@@ -192,9 +186,9 @@ template <gb::register8 Dst>
 class opcode_ld_ri : public gb::opcode
 {
 public:
-	opcode_ld_ri() : gb::opcode("LD " + to_string(Dst) + ",$", 1, 8) {}
+	opcode_ld_ri() : gb::opcode("LD " + to_string(Dst) + ",$", 1, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(cpu.value8());
 	}
@@ -204,9 +198,9 @@ template <gb::register16 Dst>
 class opcode_ld_mi : public gb::opcode
 {
 public:
-	opcode_ld_mi() : gb::opcode("LD (" + to_string(Dst) + "),$", 1, 12) {}
+	opcode_ld_mi() : gb::opcode("LD (" + to_string(Dst) + "),$", 1, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.memory().write8(cpu.registers().read16<Dst>(), cpu.value8());
 	}
@@ -216,9 +210,9 @@ template <gb::register8 Dst, gb::register8 Src>
 class opcode_ld_rr : public gb::opcode
 {
 public:
-	opcode_ld_rr() : gb::opcode("LD " + to_string(Dst) + "," + to_string(Src), 0, 4) {}
+	opcode_ld_rr() : gb::opcode("LD " + to_string(Dst) + "," + to_string(Src), 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(cpu.registers().read8<Src>());
 	}
@@ -228,9 +222,9 @@ template <gb::register8 Dst, gb::register16 Src>
 class opcode_ld_rm : public gb::opcode
 {
 public:
-	opcode_ld_rm() : gb::opcode("LD " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 8) {}
+	opcode_ld_rm() : gb::opcode("LD " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(cpu.memory().read8(cpu.registers().read16<Src>()));
 	}
@@ -240,9 +234,9 @@ template <gb::register8 Dst>
 class opcode_ld_rmi : public gb::opcode
 {
 public:
-	opcode_ld_rmi() : gb::opcode("LD " + to_string(Dst) + ",($)", 2, 16) {}
+	opcode_ld_rmi() : gb::opcode("LD " + to_string(Dst) + ",($)", 2, 16, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(cpu.memory().read8(cpu.value16()));
 	}
@@ -252,9 +246,9 @@ template <gb::register8 Src>
 class opcode_ld_mir : public gb::opcode
 {
 public:
-	opcode_ld_mir() : gb::opcode("LD ($)," + to_string(Src), 2, 16)	{}
+	opcode_ld_mir() : gb::opcode("LD ($)," + to_string(Src), 2, 16, &execute)	{}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.memory().write8(cpu.value16(), cpu.registers().read8<Src>());
 	}
@@ -264,9 +258,9 @@ template <gb::register16 Dst, gb::register8 Src>
 class opcode_ld_mr : public gb::opcode
 {
 public:
-	opcode_ld_mr() : gb::opcode("LD (" + to_string(Dst) + ")," + to_string(Src), 0, 8) {}
+	opcode_ld_mr() : gb::opcode("LD (" + to_string(Dst) + ")," + to_string(Src), 0, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.memory().write8(cpu.registers().read16<Dst>(), cpu.registers().read8<Src>());
 	}
@@ -276,9 +270,9 @@ public:
 class opcode_ldff_ac : public gb::opcode
 {
 public:
-	opcode_ldff_ac() : gb::opcode("LD A,(ff00h+C)", 0, 8) {}
+	opcode_ldff_ac() : gb::opcode("LD A,(ff00h+C)", 0, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<r8::a>(cpu.memory().read8(0xFF00 + cpu.registers().read8<r8::c>()));
 	}
@@ -287,9 +281,9 @@ public:
 class opcode_ldff_ai : public gb::opcode
 {
 public:
-	opcode_ldff_ai() : gb::opcode("LD A,(ff00h+$)", 1, 12) {}
+	opcode_ldff_ai() : gb::opcode("LD A,(ff00h+$)", 1, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<r8::a>(cpu.memory().read8(0xFF00 + cpu.value8()));
 	}
@@ -298,9 +292,9 @@ public:
 class opcode_ldff_ca : public gb::opcode
 {
 public:
-	opcode_ldff_ca() : gb::opcode("LD (ff00h+C),A", 0, 8) {}
+	opcode_ldff_ca() : gb::opcode("LD (ff00h+C),A", 0, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.memory().write8(0xFF00 + cpu.registers().read8<r8::c>(), cpu.registers().read8<r8::a>());
 	}
@@ -309,9 +303,9 @@ public:
 class opcode_ldff_ia : public gb::opcode
 {
 public:
-	opcode_ldff_ia() : gb::opcode("LD (ff00h+$),A", 1, 12) {}
+	opcode_ldff_ia() : gb::opcode("LD (ff00h+$),A", 1, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.memory().write8(0xFF00 + cpu.value8(), cpu.registers().read8<r8::a>());
 	}
@@ -322,10 +316,10 @@ class opcode_lddi : public gb::opcode
 {
 public:
 	opcode_lddi() :
-		gb::opcode(std::string(Dec ? "LDD" : "LDI") + " " + (AHL ? "A,(HL)" : "(HL),A"), 0, 8)
+		gb::opcode(std::string(Dec ? "LDD" : "LDI") + " " + (AHL ? "A,(HL)" : "(HL),A"), 0, 8, &execute)
 	{}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t hl = cpu.registers().read16<r16::hl>();
 		
@@ -347,9 +341,9 @@ template <gb::register16 Dst>
 class opcode_ld16_ri : public gb::opcode
 {
 public:
-	opcode_ld16_ri() : gb::opcode("LD " + to_string(Dst) + ",$", 2, 12) {}
+	opcode_ld16_ri() : gb::opcode("LD " + to_string(Dst) + ",$", 2, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write16<Dst>(cpu.value16());
 	}
@@ -359,9 +353,9 @@ template <gb::register16 Dst, gb::register16 Src>
 class opcode_ld16_rr : public gb::opcode
 {
 public:
-	opcode_ld16_rr() : gb::opcode("LD " + to_string(Dst) + "," + to_string(Src), 0, 8) {}
+	opcode_ld16_rr() : gb::opcode("LD " + to_string(Dst) + "," + to_string(Src), 0, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write16<Dst>(cpu.registers().read16<Src>());
 	}
@@ -370,9 +364,9 @@ public:
 class opcode_ld16_hlspn : public gb::opcode
 {
 public:
-	opcode_ld16_hlspn() : gb::opcode("LD HL,SP+$", 1, 12) {}
+	opcode_ld16_hlspn() : gb::opcode("LD HL,SP+$", 1, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		const uint16_t sp = cpu.registers().read16<r16::sp>();
 		const uint16_t offset = sign_extend(cpu.value8());
@@ -390,9 +384,9 @@ template <gb::register16 Src>
 class opcode_ld16_mir : public gb::opcode
 {
 public:
-	opcode_ld16_mir() : gb::opcode("LD ($)," + to_string(Src), 2, 20) {}
+	opcode_ld16_mir() : gb::opcode("LD ($)," + to_string(Src), 2, 20, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.memory().write16(cpu.value16(), cpu.registers().read16<Src>());
 	}
@@ -403,9 +397,9 @@ template <gb::register16 Src>
 class opcode_push : public gb::opcode
 {
 public:
-	opcode_push() : gb::opcode("PUSH " + to_string(Src), 0, 16) {}
+	opcode_push() : gb::opcode("PUSH " + to_string(Src), 0, 16, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t sp = cpu.registers().read16<r16::sp>();
 		sp -= 2;
@@ -418,9 +412,9 @@ template <gb::register16 Dst>
 class opcode_pop : public gb::opcode
 {
 public:
-	opcode_pop() : gb::opcode("POP " + to_string(Dst), 0, 12) {}
+	opcode_pop() : gb::opcode("POP " + to_string(Dst), 0, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t sp = cpu.registers().read16<r16::sp>();
 		cpu.registers().write16<Dst>(cpu.memory().read16(sp));
@@ -433,9 +427,9 @@ template <operation Op, gb::register8 Dst, gb::register8 Src>
 class opcode_alu_rr : public gb::opcode
 {
 public:
-	opcode_alu_rr() : gb::opcode(to_string(Op) + " " + to_string(Dst) + "," + to_string(Src), 0, 4) {}
+	opcode_alu_rr() : gb::opcode(to_string(Op) + " " + to_string(Dst) + "," + to_string(Src), 0, 4, &execute) {}
 		
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(execute_alu(
 			Op,
@@ -449,9 +443,9 @@ template <operation Op, gb::register8 Dst, gb::register16 Src>
 class opcode_alu_rm : public gb::opcode
 {
 public:
-	opcode_alu_rm() : gb::opcode(to_string(Op) + " " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 8) {}
+	opcode_alu_rm() : gb::opcode(to_string(Op) + " " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 8, &execute) {}
 		
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(execute_alu(
 			Op,
@@ -465,9 +459,9 @@ template <operation Op, gb::register8 Dst>
 class opcode_alu_ri : public gb::opcode
 {
 public:
-	opcode_alu_ri() : gb::opcode(to_string(Op) + " " + to_string(Dst) + ",$", 1, 8) {}
+	opcode_alu_ri() : gb::opcode(to_string(Op) + " " + to_string(Dst) + ",$", 1, 8, &execute) {}
 		
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(execute_alu(
 			Op,
@@ -482,9 +476,9 @@ template <bool Dec, gb::register8 Dst>
 class opcode_decinc_r : public gb::opcode
 {
 public:
-	opcode_decinc_r() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " " + to_string(Dst), 0, 4) {}
+	opcode_decinc_r() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " " + to_string(Dst), 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint8_t value = cpu.registers().read8<Dst>();
 		if (Dec)
@@ -508,9 +502,9 @@ template <bool Dec, gb::register16 Dst>
 class opcode_decinc_rm : public gb::opcode
 {
 public:
-	opcode_decinc_rm() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " (" + to_string(Dst) + ")", 0, 12) {}
+	opcode_decinc_rm() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " (" + to_string(Dst) + ")", 0, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint8_t value = cpu.memory().read8(cpu.registers().read16<Dst>());
 		if (Dec)
@@ -534,9 +528,9 @@ template <gb::register16 Src>
 class opcode_add16_hl : public gb::opcode
 {
 public:
-	opcode_add16_hl() : gb::opcode("ADD HL," + to_string(Src), 0, 8) {}
+	opcode_add16_hl() : gb::opcode("ADD HL," + to_string(Src), 0, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t hl = cpu.registers().read16<r16::hl>();
 		uint16_t offset = cpu.registers().read16<Src>();
@@ -553,9 +547,9 @@ public:
 class opcode_add16_sp_i : public gb::opcode
 {
 public:
-	opcode_add16_sp_i() : gb::opcode("ADD SP,$", 1, 16) {}
+	opcode_add16_sp_i() : gb::opcode("ADD SP,$", 1, 16, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t sp = cpu.registers().read16<r16::sp>();
 		uint16_t offset = sign_extend(cpu.value8());
@@ -574,9 +568,9 @@ template <bool Dec, gb::register16 Dst>
 class opcode_decinc16_r : public gb::opcode
 {
 public:
-	opcode_decinc16_r() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " " + to_string(Dst), 0, 8) {}
+	opcode_decinc16_r() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " " + to_string(Dst), 0, 8, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t value = cpu.registers().read16<Dst>();
 		if (Dec)
@@ -590,9 +584,9 @@ public:
 class opcode_daa : public gb::opcode
 {
 public:
-	opcode_daa() : gb::opcode("DAA", 0, 4) {}
+	opcode_daa() : gb::opcode("DAA", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		// I don't even ...
 		// http://forums.nesdev.com/viewtopic.php?t=9088
@@ -637,9 +631,9 @@ public:
 class opcode_cpl : public gb::opcode
 {
 public:
-	opcode_cpl() : gb::opcode("CPL", 0, 4) {}
+	opcode_cpl() : gb::opcode("CPL", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<r8::a>(~cpu.registers().read8<r8::a>());
 		cpu.registers().set<flag::n>(true);
@@ -650,9 +644,9 @@ public:
 class opcode_ccf : public gb::opcode
 {
 public:
-	opcode_ccf() : gb::opcode("CCF", 0, 4) {}
+	opcode_ccf() : gb::opcode("CCF", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().set<flag::n>(false);
 		cpu.registers().set<flag::h>(false);
@@ -663,9 +657,9 @@ public:
 class opcode_scf : public gb::opcode
 {
 public:
-	opcode_scf() : gb::opcode("SCF", 0, 4) {}
+	opcode_scf() : gb::opcode("SCF", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().set<flag::n>(false);
 		cpu.registers().set<flag::h>(false);
@@ -676,9 +670,9 @@ public:
 class opcode_halt : public gb::opcode
 {
 public:
-	opcode_halt() : gb::opcode("HALT", 0, 4) {}
+	opcode_halt() : gb::opcode("HALT", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.halt();
 	}
@@ -687,9 +681,9 @@ public:
 class opcode_stop : public gb::opcode
 {
 public:
-	opcode_stop() : gb::opcode("STOP", 0, 4) {}
+	opcode_stop() : gb::opcode("STOP", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.stop();
 	}
@@ -698,9 +692,9 @@ public:
 class opcode_di : public gb::opcode
 {
 public:
-	opcode_di() : gb::opcode("DI", 0, 4) {}
+	opcode_di() : gb::opcode("DI", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.set_ime(false);
 	}
@@ -709,9 +703,9 @@ public:
 class opcode_ei : public gb::opcode
 {
 public:
-	opcode_ei() : gb::opcode("EI", 0, 4) {}
+	opcode_ei() : gb::opcode("EI", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.set_ime(true);
 	}
@@ -720,8 +714,8 @@ public:
 class opcode_nop : public gb::opcode
 {
 public:
-	opcode_nop() : gb::opcode("NOP", 0, 4) {}
-	void execute(gb::z80_cpu &) const override {}
+	opcode_nop() : gb::opcode("NOP", 0, 4, &execute) {}
+	static void execute(gb::z80_cpu &) {}
 };
 
 template <bool Left, bool Carry, bool CorrectZ> uint8_t rd_impl(gb::z80_cpu &cpu, uint8_t value)
@@ -766,9 +760,9 @@ template <bool Left, bool Carry>
 class opcode_rda : public gb::opcode
 {
 public:
-	opcode_rda() : gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + "A", 0, 4) {}
+	opcode_rda() : gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + "A", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<r8::a>(rd_impl<Left, Carry, false>(cpu, cpu.registers().read8<r8::a>()));
 	}
@@ -778,9 +772,9 @@ template <cond Cond>
 class opcode_jp_i : public gb::opcode
 {
 public:
-	opcode_jp_i() : gb::opcode("JP " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 16) {}
+	opcode_jp_i() : gb::opcode("JP " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 16, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		if (check_condition(cpu, Cond))
 		{
@@ -792,9 +786,9 @@ public:
 class opcode_jp_hl : public gb::opcode
 {
 public:
-	opcode_jp_hl() : gb::opcode("JP HL", 0, 4) {}
+	opcode_jp_hl() : gb::opcode("JP HL", 0, 4, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write16<r16::pc>(cpu.registers().read16<r16::hl>());
 	}
@@ -804,9 +798,9 @@ template <cond Cond>
 class opcode_jr_i : public gb::opcode
 {
 public:
-	opcode_jr_i() : gb::opcode("JR " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 1, 12) {}
+	opcode_jr_i() : gb::opcode("JR " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 1, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		if (check_condition(cpu, Cond))
 		{
@@ -820,9 +814,9 @@ template <cond Cond>
 class opcode_call : public gb::opcode
 {
 public:
-	opcode_call() : gb::opcode("CALL " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 24) {}
+	opcode_call() : gb::opcode("CALL " + to_string(Cond) + (Cond == cond::nop ? "" : ",") + "$", 2, 24, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		if (check_condition(cpu, Cond))
 		{
@@ -840,9 +834,9 @@ template <uint8_t Addr>
 class opcode_rst : public gb::opcode
 {
 public:
-	opcode_rst() : gb::opcode("RST " + std::to_string(Addr), 0, 16) {}
+	opcode_rst() : gb::opcode("RST " + std::to_string(Addr), 0, 16, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t pc = cpu.registers().read16<r16::pc>();
 		uint16_t sp = cpu.registers().read16<r16::sp>();
@@ -857,9 +851,9 @@ template <cond Cond, bool Ei>
 class opcode_ret : public gb::opcode
 {
 public:
-	opcode_ret() : gb::opcode(std::string("RET") + (Ei ? "I" : "") + (Cond == cond::nop ? std::string("") : (" " + to_string(Cond))), 0, 12) {}
+	opcode_ret() : gb::opcode(std::string("RET") + (Ei ? "I" : "") + (Cond == cond::nop ? std::string("") : (" " + to_string(Cond))), 0, 12, &execute) {}
 
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		if (check_condition(cpu, Cond))
 		{
@@ -878,9 +872,9 @@ public:
 class opcode_hang : public gb::opcode
 {
 public:
-	opcode_hang() : gb::opcode("HANG", 0, 0) {}
+	opcode_hang() : gb::opcode("HANG", 0, 0, &execute) {}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		debug("WARNING: Game used invalid opcode, hang");
 		cpu.set_ime(false);
@@ -893,10 +887,10 @@ class opcode_cb_rdc_r : public gb::opcode
 {
 public:
 	opcode_cb_rdc_r() :
-		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " " + to_string(Dst), 0, 8)
+		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " " + to_string(Dst), 0, 8, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(rd_impl<Left, Carry, true>(cpu, cpu.registers().read8<Dst>()));
 	}
@@ -907,10 +901,10 @@ class opcode_cb_rdc_m : public gb::opcode
 {
 public:
 	opcode_cb_rdc_m() :
-		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " (" + to_string(Dst) + ")", 0, 16)
+		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " (" + to_string(Dst) + ")", 0, 16, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
 		cpu.memory().write8(addr, rd_impl<Left, Carry, true>(cpu, cpu.memory().read8(addr)));
@@ -946,10 +940,10 @@ class opcode_cb_sda_r : public gb::opcode
 {
 public:
 	opcode_cb_sda_r() :
-		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A " + to_string(Dst), 0, 8)
+		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A " + to_string(Dst), 0, 8, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(sda_impl<Left>(cpu, cpu.registers().read8<Dst>()));
 	}
@@ -960,10 +954,10 @@ class opcode_cb_sda_m : public gb::opcode
 {
 public:
 	opcode_cb_sda_m() :
-		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A (" + to_string(Dst) + ")", 0, 16)
+		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A (" + to_string(Dst) + ")", 0, 16, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
 		cpu.memory().write8(addr, sda_impl<Left>(cpu, cpu.memory().read8(addr)));
@@ -987,10 +981,10 @@ class opcode_cb_swap_r : public gb::opcode
 {
 public:
 	opcode_cb_swap_r() :
-		gb::opcode("SWAP " + to_string(Dst), 0, 8)
+		gb::opcode("SWAP " + to_string(Dst), 0, 8, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(swap_impl(cpu, cpu.registers().read8<Dst>()));
 	}
@@ -1001,10 +995,10 @@ class opcode_cb_swap_m : public gb::opcode
 {
 public:
 	opcode_cb_swap_m() :
-		gb::opcode("SWAP (" + to_string(Dst) + ")", 0, 16)
+		gb::opcode("SWAP (" + to_string(Dst) + ")", 0, 16, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
 		cpu.memory().write8(addr, swap_impl(cpu, cpu.memory().read8(addr)));
@@ -1027,10 +1021,10 @@ class opcode_cb_srl_r : public gb::opcode
 {
 public:
 	opcode_cb_srl_r() :
-		gb::opcode("SRL " + to_string(Dst), 0, 8)
+		gb::opcode("SRL " + to_string(Dst), 0, 8, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().write8<Dst>(srl_impl(cpu, cpu.registers().read8<Dst>()));
 	}
@@ -1041,10 +1035,10 @@ class opcode_cb_srl_m : public gb::opcode
 {
 public:
 	opcode_cb_srl_m() :
-		gb::opcode("SRL (" + to_string(Dst) + ")", 0, 16)
+		gb::opcode("SRL (" + to_string(Dst) + ")", 0, 16, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
 		cpu.memory().write8(addr, srl_impl(cpu, cpu.memory().read8(addr)));
@@ -1056,10 +1050,10 @@ class opcode_cb_bit_r : public gb::opcode
 {
 public:
 	opcode_cb_bit_r() :
-		gb::opcode("BIT " + std::to_string(bit) + "," + to_string(Dst), 0, 8)
+		gb::opcode("BIT " + std::to_string(bit) + "," + to_string(Dst), 0, 8, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		cpu.registers().set<flag::z>((cpu.registers().read8<Dst>() & (1 << bit)) == 0);
 		cpu.registers().set<flag::n>(false);
@@ -1072,10 +1066,10 @@ class opcode_cb_bit_m : public gb::opcode
 {
 public:
 	opcode_cb_bit_m() :
-		gb::opcode("BIT " + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 12)
+		gb::opcode("BIT " + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 12, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
 		cpu.registers().set<flag::z>((cpu.memory().read8(addr) & (1 << bit)) == 0);
@@ -1089,10 +1083,10 @@ class opcode_cb_resset_r : public gb::opcode
 {
 public:
 	opcode_cb_resset_r() :
-		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + "," + to_string(Dst), 0, 8)
+		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + "," + to_string(Dst), 0, 8, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint8_t b = 1 << bit;
 		if (res)
@@ -1107,10 +1101,10 @@ class opcode_cb_resset_m : public gb::opcode
 {
 public:
 	opcode_cb_resset_m() :
-		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 16)
+		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 16, &execute)
 	{}
 	
-	void execute(gb::z80_cpu &cpu) const override
+	static void execute(gb::z80_cpu &cpu)
 	{
 		uint8_t b = 1 << bit;
 		uint16_t addr = cpu.registers().read16<Dst>();
@@ -1121,553 +1115,522 @@ public:
 	}
 };
 
-void init_opcodes()
-{
-	using r = gb::register8;
-	using r16 = gb::register16;
-	using std::make_unique;
-	auto &ops = opcodes_table;
-
-	ops[0x00] = make_unique<opcode_nop>();
-	ops[0x01] = make_unique<opcode_ld16_ri<r16::bc>>();
-	ops[0x02] = make_unique<opcode_ld_mr<r16::bc, r::a>>();
-	ops[0x03] = make_unique<opcode_decinc16_r<false, r16::bc>>();
-	ops[0x04] = make_unique<opcode_decinc_r<false, r::b>>();
-	ops[0x05] = make_unique<opcode_decinc_r<true, r::b>>();
-	ops[0x06] = make_unique<opcode_ld_ri<r::b>>();
-	ops[0x07] = make_unique<opcode_rda<true, true>>();
-	ops[0x08] = make_unique<opcode_ld16_mir<r16::sp>>();
-	ops[0x09] = make_unique<opcode_add16_hl<r16::bc>>();
-	ops[0x0A] = make_unique<opcode_ld_rm<r::a, r16::bc>>();
-	ops[0x0B] = make_unique<opcode_decinc16_r<true, r16::bc>>();
-	ops[0x0C] = make_unique<opcode_decinc_r<false, r::c>>();
-	ops[0x0D] = make_unique<opcode_decinc_r<true, r::c>>();
-	ops[0x0E] = make_unique<opcode_ld_ri<r::c>>();
-	ops[0x0F] = make_unique<opcode_rda<false, true>>();
-	ops[0x10] = make_unique<opcode_stop>();
-	ops[0x11] = make_unique<opcode_ld16_ri<r16::de>>();
-	ops[0x12] = make_unique<opcode_ld_mr<r16::de, r::a>>();
-	ops[0x13] = make_unique<opcode_decinc16_r<false, r16::de>>();
-	ops[0x14] = make_unique<opcode_decinc_r<false, r::d>>();
-	ops[0x15] = make_unique<opcode_decinc_r<true, r::d>>();
-	ops[0x16] = make_unique<opcode_ld_ri<r::d>>();
-	ops[0x17] = make_unique<opcode_rda<true, false>>();
-	ops[0x18] = make_unique<opcode_jr_i<cond::nop>>();
-	ops[0x19] = make_unique<opcode_add16_hl<r16::de>>();
-	ops[0x1A] = make_unique<opcode_ld_rm<r::a, r16::de>>();
-	ops[0x1B] = make_unique<opcode_decinc16_r<true, r16::de>>();
-	ops[0x1C] = make_unique<opcode_decinc_r<false, r::e>>();
-	ops[0x1D] = make_unique<opcode_decinc_r<true, r::e>>();
-	ops[0x1E] = make_unique<opcode_ld_ri<r::e>>();
-	ops[0x1F] = make_unique<opcode_rda<false, false>>();
-	ops[0x20] = make_unique<opcode_jr_i<cond::nz>>();
-	ops[0x21] = make_unique<opcode_ld16_ri<r16::hl>>();
-	ops[0x22] = make_unique<opcode_lddi<false, false>>();
-	ops[0x23] = make_unique<opcode_decinc16_r<false, r16::hl>>();
-	ops[0x24] = make_unique<opcode_decinc_r<false, r::h>>();
-	ops[0x25] = make_unique<opcode_decinc_r<true, r::h>>();
-	ops[0x26] = make_unique<opcode_ld_ri<r::h>>();
-	ops[0x27] = make_unique<opcode_daa>();
-	ops[0x28] = make_unique<opcode_jr_i<cond::z>>();
-	ops[0x29] = make_unique<opcode_add16_hl<r16::hl>>();
-	ops[0x2A] = make_unique<opcode_lddi<false, true>>();
-	ops[0x2B] = make_unique<opcode_decinc16_r<true, r16::hl>>();
-	ops[0x2C] = make_unique<opcode_decinc_r<false, r::l>>();
-	ops[0x2D] = make_unique<opcode_decinc_r<true, r::l>>();
-	ops[0x2E] = make_unique<opcode_ld_ri<r::l>>();
-	ops[0x2F] = make_unique<opcode_cpl>();
-	ops[0x30] = make_unique<opcode_jr_i<cond::nc>>();
-	ops[0x31] = make_unique<opcode_ld16_ri<r16::sp>>();
-	ops[0x32] = make_unique<opcode_lddi<true, false>>();
-	ops[0x33] = make_unique<opcode_decinc16_r<false, r16::sp>>();
-	ops[0x34] = make_unique<opcode_decinc_rm<false, r16::hl>>();
-	ops[0x35] = make_unique<opcode_decinc_rm<true, r16::hl>>();
-	ops[0x36] = make_unique<opcode_ld_mi<r16::hl>>();
-	ops[0x37] = make_unique<opcode_scf>();
-	ops[0x38] = make_unique<opcode_jr_i<cond::c>>();
-	ops[0x39] = make_unique<opcode_add16_hl<r16::sp>>();
-	ops[0x3A] = make_unique<opcode_lddi<true, true>>();
-	ops[0x3B] = make_unique<opcode_decinc16_r<true, r16::sp>>();
-	ops[0x3C] = make_unique<opcode_decinc_r<false, r::a>>();
-	ops[0x3D] = make_unique<opcode_decinc_r<true, r::a>>();
-	ops[0x3E] = make_unique<opcode_ld_ri<r::a>>();
-	ops[0x3F] = make_unique<opcode_ccf>();
-	ops[0x40] = make_unique<opcode_ld_rr<r::b, r::b>>();
-	ops[0x41] = make_unique<opcode_ld_rr<r::b, r::c>>();
-	ops[0x42] = make_unique<opcode_ld_rr<r::b, r::d>>();
-	ops[0x43] = make_unique<opcode_ld_rr<r::b, r::e>>();
-	ops[0x44] = make_unique<opcode_ld_rr<r::b, r::h>>();
-	ops[0x45] = make_unique<opcode_ld_rr<r::b, r::l>>();
-	ops[0x46] = make_unique<opcode_ld_rm<r::b, r16::hl>>();
-	ops[0x47] = make_unique<opcode_ld_rr<r::b, r::a>>();
-	ops[0x48] = make_unique<opcode_ld_rr<r::c, r::b>>();
-	ops[0x49] = make_unique<opcode_ld_rr<r::c, r::c>>();
-	ops[0x4A] = make_unique<opcode_ld_rr<r::c, r::d>>();
-	ops[0x4B] = make_unique<opcode_ld_rr<r::c, r::e>>();
-	ops[0x4C] = make_unique<opcode_ld_rr<r::c, r::h>>();
-	ops[0x4D] = make_unique<opcode_ld_rr<r::c, r::l>>();
-	ops[0x4E] = make_unique<opcode_ld_rm<r::c, r16::hl>>();
-	ops[0x4F] = make_unique<opcode_ld_rr<r::c, r::a>>();
-	ops[0x50] = make_unique<opcode_ld_rr<r::d, r::b>>();
-	ops[0x51] = make_unique<opcode_ld_rr<r::d, r::c>>();
-	ops[0x52] = make_unique<opcode_ld_rr<r::d, r::d>>();
-	ops[0x53] = make_unique<opcode_ld_rr<r::d, r::e>>();
-	ops[0x54] = make_unique<opcode_ld_rr<r::d, r::h>>();
-	ops[0x55] = make_unique<opcode_ld_rr<r::d, r::l>>();
-	ops[0x56] = make_unique<opcode_ld_rm<r::d, r16::hl>>();
-	ops[0x57] = make_unique<opcode_ld_rr<r::d, r::a>>();
-	ops[0x58] = make_unique<opcode_ld_rr<r::e, r::b>>();
-	ops[0x59] = make_unique<opcode_ld_rr<r::e, r::c>>();
-	ops[0x5A] = make_unique<opcode_ld_rr<r::e, r::d>>();
-	ops[0x5B] = make_unique<opcode_ld_rr<r::e, r::e>>();
-	ops[0x5C] = make_unique<opcode_ld_rr<r::e, r::h>>();
-	ops[0x5D] = make_unique<opcode_ld_rr<r::e, r::l>>();
-	ops[0x5E] = make_unique<opcode_ld_rm<r::e, r16::hl>>();
-	ops[0x5F] = make_unique<opcode_ld_rr<r::e, r::a>>();
-	ops[0x60] = make_unique<opcode_ld_rr<r::h, r::b>>();
-	ops[0x61] = make_unique<opcode_ld_rr<r::h, r::c>>();
-	ops[0x62] = make_unique<opcode_ld_rr<r::h, r::d>>();
-	ops[0x63] = make_unique<opcode_ld_rr<r::h, r::e>>();
-	ops[0x64] = make_unique<opcode_ld_rr<r::h, r::h>>();
-	ops[0x65] = make_unique<opcode_ld_rr<r::h, r::l>>();
-	ops[0x66] = make_unique<opcode_ld_rm<r::h, r16::hl>>();
-	ops[0x67] = make_unique<opcode_ld_rr<r::h, r::a>>();
-	ops[0x68] = make_unique<opcode_ld_rr<r::l, r::b>>();
-	ops[0x69] = make_unique<opcode_ld_rr<r::l, r::c>>();
-	ops[0x6A] = make_unique<opcode_ld_rr<r::l, r::d>>();
-	ops[0x6B] = make_unique<opcode_ld_rr<r::l, r::e>>();
-	ops[0x6C] = make_unique<opcode_ld_rr<r::l, r::h>>();
-	ops[0x6D] = make_unique<opcode_ld_rr<r::l, r::l>>();
-	ops[0x6E] = make_unique<opcode_ld_rm<r::l, r16::hl>>();
-	ops[0x6F] = make_unique<opcode_ld_rr<r::l, r::a>>();
-	ops[0x70] = make_unique<opcode_ld_mr<r16::hl, r::b>>();
-	ops[0x71] = make_unique<opcode_ld_mr<r16::hl, r::c>>();
-	ops[0x72] = make_unique<opcode_ld_mr<r16::hl, r::d>>();
-	ops[0x73] = make_unique<opcode_ld_mr<r16::hl, r::e>>();
-	ops[0x74] = make_unique<opcode_ld_mr<r16::hl, r::h>>();
-	ops[0x75] = make_unique<opcode_ld_mr<r16::hl, r::l>>();
-	ops[0x76] = make_unique<opcode_halt>();
-	ops[0x77] = make_unique<opcode_ld_mr<r16::hl, r::a>>();
-	ops[0x78] = make_unique<opcode_ld_rr<r::a, r::b>>();
-	ops[0x79] = make_unique<opcode_ld_rr<r::a, r::c>>();
-	ops[0x7A] = make_unique<opcode_ld_rr<r::a, r::d>>();
-	ops[0x7B] = make_unique<opcode_ld_rr<r::a, r::e>>();
-	ops[0x7C] = make_unique<opcode_ld_rr<r::a, r::h>>();
-	ops[0x7D] = make_unique<opcode_ld_rr<r::a, r::l>>();
-	ops[0x7E] = make_unique<opcode_ld_rm<r::a, r16::hl>>();
-	ops[0x7F] = make_unique<opcode_ld_rr<r::a, r::a>>();
-	ops[0x80] = make_unique<opcode_alu_rr<operation::add, r::a, r::b>>();
-	ops[0x81] = make_unique<opcode_alu_rr<operation::add, r::a, r::c>>();
-	ops[0x82] = make_unique<opcode_alu_rr<operation::add, r::a, r::d>>();
-	ops[0x83] = make_unique<opcode_alu_rr<operation::add, r::a, r::e>>();
-	ops[0x84] = make_unique<opcode_alu_rr<operation::add, r::a, r::h>>();
-	ops[0x85] = make_unique<opcode_alu_rr<operation::add, r::a, r::l>>();
-	ops[0x86] = make_unique<opcode_alu_rm<operation::add, r::a, r16::hl>>();
-	ops[0x87] = make_unique<opcode_alu_rr<operation::add, r::a, r::a>>();
-	ops[0x88] = make_unique<opcode_alu_rr<operation::adc, r::a, r::b>>();
-	ops[0x89] = make_unique<opcode_alu_rr<operation::adc, r::a, r::c>>();
-	ops[0x8A] = make_unique<opcode_alu_rr<operation::adc, r::a, r::d>>();
-	ops[0x8B] = make_unique<opcode_alu_rr<operation::adc, r::a, r::e>>();
-	ops[0x8C] = make_unique<opcode_alu_rr<operation::adc, r::a, r::h>>();
-	ops[0x8D] = make_unique<opcode_alu_rr<operation::adc, r::a, r::l>>();
-	ops[0x8E] = make_unique<opcode_alu_rm<operation::adc, r::a, r16::hl>>();
-	ops[0x8F] = make_unique<opcode_alu_rr<operation::adc, r::a, r::a>>();
-	ops[0x90] = make_unique<opcode_alu_rr<operation::sub, r::a, r::b>>();
-	ops[0x91] = make_unique<opcode_alu_rr<operation::sub, r::a, r::c>>();
-	ops[0x92] = make_unique<opcode_alu_rr<operation::sub, r::a, r::d>>();
-	ops[0x93] = make_unique<opcode_alu_rr<operation::sub, r::a, r::e>>();
-	ops[0x94] = make_unique<opcode_alu_rr<operation::sub, r::a, r::h>>();
-	ops[0x95] = make_unique<opcode_alu_rr<operation::sub, r::a, r::l>>();
-	ops[0x96] = make_unique<opcode_alu_rm<operation::sub, r::a, r16::hl>>();
-	ops[0x97] = make_unique<opcode_alu_rr<operation::sub, r::a, r::a>>();
-	ops[0x98] = make_unique<opcode_alu_rr<operation::sbc, r::a, r::b>>();
-	ops[0x99] = make_unique<opcode_alu_rr<operation::sbc, r::a, r::c>>();
-	ops[0x9A] = make_unique<opcode_alu_rr<operation::sbc, r::a, r::d>>();
-	ops[0x9B] = make_unique<opcode_alu_rr<operation::sbc, r::a, r::e>>();
-	ops[0x9C] = make_unique<opcode_alu_rr<operation::sbc, r::a, r::h>>();
-	ops[0x9D] = make_unique<opcode_alu_rr<operation::sbc, r::a, r::l>>();
-	ops[0x9E] = make_unique<opcode_alu_rm<operation::sbc, r::a, r16::hl>>();
-	ops[0x9F] = make_unique<opcode_alu_rr<operation::sbc, r::a, r::a>>();
-	ops[0xA0] = make_unique<opcode_alu_rr<operation::and_, r::a, r::b>>();
-	ops[0xA1] = make_unique<opcode_alu_rr<operation::and_, r::a, r::c>>();
-	ops[0xA2] = make_unique<opcode_alu_rr<operation::and_, r::a, r::d>>();
-	ops[0xA3] = make_unique<opcode_alu_rr<operation::and_, r::a, r::e>>();
-	ops[0xA4] = make_unique<opcode_alu_rr<operation::and_, r::a, r::h>>();
-	ops[0xA5] = make_unique<opcode_alu_rr<operation::and_, r::a, r::l>>();
-	ops[0xA6] = make_unique<opcode_alu_rm<operation::and_, r::a, r16::hl>>();
-	ops[0xA7] = make_unique<opcode_alu_rr<operation::and_, r::a, r::a>>();
-	ops[0xA8] = make_unique<opcode_alu_rr<operation::xor_, r::a, r::b>>();
-	ops[0xA9] = make_unique<opcode_alu_rr<operation::xor_, r::a, r::c>>();
-	ops[0xAA] = make_unique<opcode_alu_rr<operation::xor_, r::a, r::d>>();
-	ops[0xAB] = make_unique<opcode_alu_rr<operation::xor_, r::a, r::e>>();
-	ops[0xAC] = make_unique<opcode_alu_rr<operation::xor_, r::a, r::h>>();
-	ops[0xAD] = make_unique<opcode_alu_rr<operation::xor_, r::a, r::l>>();
-	ops[0xAE] = make_unique<opcode_alu_rm<operation::xor_, r::a, r16::hl>>();
-	ops[0xAF] = make_unique<opcode_alu_rr<operation::xor_, r::a, r::a>>();
-	ops[0xB0] = make_unique<opcode_alu_rr<operation::or_, r::a, r::b>>();
-	ops[0xB1] = make_unique<opcode_alu_rr<operation::or_, r::a, r::c>>();
-	ops[0xB2] = make_unique<opcode_alu_rr<operation::or_, r::a, r::d>>();
-	ops[0xB3] = make_unique<opcode_alu_rr<operation::or_, r::a, r::e>>();
-	ops[0xB4] = make_unique<opcode_alu_rr<operation::or_, r::a, r::h>>();
-	ops[0xB5] = make_unique<opcode_alu_rr<operation::or_, r::a, r::l>>();
-	ops[0xB6] = make_unique<opcode_alu_rm<operation::or_, r::a, r16::hl>>();
-	ops[0xB7] = make_unique<opcode_alu_rr<operation::or_, r::a, r::a>>();
-	ops[0xB8] = make_unique<opcode_alu_rr<operation::cp, r::a, r::b>>();
-	ops[0xB9] = make_unique<opcode_alu_rr<operation::cp, r::a, r::c>>();
-	ops[0xBA] = make_unique<opcode_alu_rr<operation::cp, r::a, r::d>>();
-	ops[0xBB] = make_unique<opcode_alu_rr<operation::cp, r::a, r::e>>();
-	ops[0xBC] = make_unique<opcode_alu_rr<operation::cp, r::a, r::h>>();
-	ops[0xBD] = make_unique<opcode_alu_rr<operation::cp, r::a, r::l>>();
-	ops[0xBE] = make_unique<opcode_alu_rm<operation::cp, r::a, r16::hl>>();
-	ops[0xBF] = make_unique<opcode_alu_rr<operation::cp, r::a, r::a>>();
-	ops[0xC0] = make_unique<opcode_ret<cond::nz, false>>();
-	ops[0xC1] = make_unique<opcode_pop<r16::bc>>();
-	ops[0xC2] = make_unique<opcode_jp_i<cond::nz>>();
-	ops[0xC3] = make_unique<opcode_jp_i<cond::nop>>();
-	ops[0xC4] = make_unique<opcode_call<cond::nz>>();
-	ops[0xC5] = make_unique<opcode_push<r16::bc>>();
-	ops[0xC6] = make_unique<opcode_alu_ri<operation::add, r::a>>();
-	ops[0xC7] = make_unique<opcode_rst<0x00>>();
-	ops[0xC8] = make_unique<opcode_ret<cond::z, false>>();
-	ops[0xC9] = make_unique<opcode_ret<cond::nop, false>>();
-	ops[0xCA] = make_unique<opcode_jp_i<cond::z>>();
-	ops[0xCB] = make_unique<opcode_hang>();
-	ops[0xCC] = make_unique<opcode_call<cond::z>>();
-	ops[0xCD] = make_unique<opcode_call<cond::nop>>();
-	ops[0xCE] = make_unique<opcode_alu_ri<operation::adc, r::a>>();
-	ops[0xCF] = make_unique<opcode_rst<0x08>>();
-	ops[0xD0] = make_unique<opcode_ret<cond::nc, false>>();
-	ops[0xD1] = make_unique<opcode_pop<r16::de>>();
-	ops[0xD2] = make_unique<opcode_jp_i<cond::nc>>();
-	ops[0xD3] = make_unique<opcode_hang>();
-	ops[0xD4] = make_unique<opcode_call<cond::nc>>();
-	ops[0xD5] = make_unique<opcode_push<r16::de>>();
-	ops[0xD6] = make_unique<opcode_alu_ri<operation::sub, r::a>>();
-	ops[0xD7] = make_unique<opcode_rst<0x10>>();
-	ops[0xD8] = make_unique<opcode_ret<cond::c, false>>();
-	ops[0xD9] = make_unique<opcode_ret<cond::nop, true>>();
-	ops[0xDA] = make_unique<opcode_jp_i<cond::c>>();
-	ops[0xDB] = make_unique<opcode_hang>();
-	ops[0xDC] = make_unique<opcode_call<cond::c>>();
-	ops[0xDD] = make_unique<opcode_hang>();
-	ops[0xDE] = make_unique<opcode_alu_ri<operation::sbc, r::a>>();
-	ops[0xDF] = make_unique<opcode_rst<0x18>>();
-	ops[0xE0] = make_unique<opcode_ldff_ia>();
-	ops[0xE1] = make_unique<opcode_pop<r16::hl>>();
-	ops[0xE2] = make_unique<opcode_ldff_ca>();
-	ops[0xE3] = make_unique<opcode_hang>();
-	ops[0xE4] = make_unique<opcode_hang>();
-	ops[0xE5] = make_unique<opcode_push<r16::hl>>();
-	ops[0xE6] = make_unique<opcode_alu_ri<operation::and_, r::a>>();
-	ops[0xE7] = make_unique<opcode_rst<0x20>>();
-	ops[0xE8] = make_unique<opcode_add16_sp_i>();
-	ops[0xE9] = make_unique<opcode_jp_hl>();
-	ops[0xEA] = make_unique<opcode_ld_mir<r::a>>();
-	ops[0xEB] = make_unique<opcode_hang>();
-	ops[0xEC] = make_unique<opcode_hang>();
-	ops[0xED] = make_unique<opcode_hang>();
-	ops[0xEE] = make_unique<opcode_alu_ri<operation::xor_, r::a>>();
-	ops[0xEF] = make_unique<opcode_rst<0x28>>();
-	ops[0xF0] = make_unique<opcode_ldff_ai>();
-	ops[0xF1] = make_unique<opcode_pop<r16::af>>();
-	ops[0xF2] = make_unique<opcode_ldff_ac>();
-	ops[0xF3] = make_unique<opcode_di>();
-	ops[0xF4] = make_unique<opcode_hang>();
-	ops[0xF5] = make_unique<opcode_push<r16::af>>();
-	ops[0xF6] = make_unique<opcode_alu_ri<operation::or_, r::a>>();
-	ops[0xF7] = make_unique<opcode_rst<0x30>>();
-	ops[0xF8] = make_unique<opcode_ld16_hlspn>();
-	ops[0xF9] = make_unique<opcode_ld16_rr<r16::sp, r16::hl>>();
-	ops[0xFA] = make_unique<opcode_ld_rmi<r::a>>();
-	ops[0xFB] = make_unique<opcode_ei>();
-	ops[0xFC] = make_unique<opcode_hang>();
-	ops[0xFD] = make_unique<opcode_hang>();
-	ops[0xFE] = make_unique<opcode_alu_ri<operation::cp, r::a>>();
-	ops[0xFF] = make_unique<opcode_rst<0x38>>();
 }
 
-void init_cb_opcodes()
-{
-	using r = gb::register8;
-	using r16 = gb::register16;
-	using std::make_unique;
-	auto &ops = cb_opcodes_table;
-	
-	ops[0x00] = make_unique<opcode_cb_rdc_r<true, true, r::b>>();
-	ops[0x01] = make_unique<opcode_cb_rdc_r<true, true, r::c>>();
-	ops[0x02] = make_unique<opcode_cb_rdc_r<true, true, r::d>>();
-	ops[0x03] = make_unique<opcode_cb_rdc_r<true, true, r::e>>();
-	ops[0x04] = make_unique<opcode_cb_rdc_r<true, true, r::h>>();
-	ops[0x05] = make_unique<opcode_cb_rdc_r<true, true, r::l>>();
-	ops[0x06] = make_unique<opcode_cb_rdc_m<true, true, r16::hl>>();
-	ops[0x07] = make_unique<opcode_cb_rdc_r<true, true, r::a>>();
-	ops[0x08] = make_unique<opcode_cb_rdc_r<false, true, r::b>>();
-	ops[0x09] = make_unique<opcode_cb_rdc_r<false, true, r::c>>();
-	ops[0x0A] = make_unique<opcode_cb_rdc_r<false, true, r::d>>();
-	ops[0x0B] = make_unique<opcode_cb_rdc_r<false, true, r::e>>();
-	ops[0x0C] = make_unique<opcode_cb_rdc_r<false, true, r::h>>();
-	ops[0x0D] = make_unique<opcode_cb_rdc_r<false, true, r::l>>();
-	ops[0x0E] = make_unique<opcode_cb_rdc_m<false, true, r16::hl>>();
-	ops[0x0F] = make_unique<opcode_cb_rdc_r<false, true, r::a>>();
-	ops[0x10] = make_unique<opcode_cb_rdc_r<true, false, r::b>>();
-	ops[0x11] = make_unique<opcode_cb_rdc_r<true, false, r::c>>();
-	ops[0x12] = make_unique<opcode_cb_rdc_r<true, false, r::d>>();
-	ops[0x13] = make_unique<opcode_cb_rdc_r<true, false, r::e>>();
-	ops[0x14] = make_unique<opcode_cb_rdc_r<true, false, r::h>>();
-	ops[0x15] = make_unique<opcode_cb_rdc_r<true, false, r::l>>();
-	ops[0x16] = make_unique<opcode_cb_rdc_m<true, false, r16::hl>>();
-	ops[0x17] = make_unique<opcode_cb_rdc_r<true, false, r::a>>();
-	ops[0x18] = make_unique<opcode_cb_rdc_r<false, false, r::b>>();
-	ops[0x19] = make_unique<opcode_cb_rdc_r<false, false, r::c>>();
-	ops[0x1A] = make_unique<opcode_cb_rdc_r<false, false, r::d>>();
-	ops[0x1B] = make_unique<opcode_cb_rdc_r<false, false, r::e>>();
-	ops[0x1C] = make_unique<opcode_cb_rdc_r<false, false, r::h>>();
-	ops[0x1D] = make_unique<opcode_cb_rdc_r<false, false, r::l>>();
-	ops[0x1E] = make_unique<opcode_cb_rdc_m<false, false, r16::hl>>();
-	ops[0x1F] = make_unique<opcode_cb_rdc_r<false, false, r::a>>();
-	ops[0x20] = make_unique<opcode_cb_sda_r<true, r::b>>();
-	ops[0x21] = make_unique<opcode_cb_sda_r<true, r::c>>();
-	ops[0x22] = make_unique<opcode_cb_sda_r<true, r::d>>();
-	ops[0x23] = make_unique<opcode_cb_sda_r<true, r::e>>();
-	ops[0x24] = make_unique<opcode_cb_sda_r<true, r::h>>();
-	ops[0x25] = make_unique<opcode_cb_sda_r<true, r::l>>();
-	ops[0x26] = make_unique<opcode_cb_sda_m<true, r16::hl>>();
-	ops[0x27] = make_unique<opcode_cb_sda_r<true, r::a>>();
-	ops[0x28] = make_unique<opcode_cb_sda_r<false, r::b>>();
-	ops[0x29] = make_unique<opcode_cb_sda_r<false, r::c>>();
-	ops[0x2A] = make_unique<opcode_cb_sda_r<false, r::d>>();
-	ops[0x2B] = make_unique<opcode_cb_sda_r<false, r::e>>();
-	ops[0x2C] = make_unique<opcode_cb_sda_r<false, r::h>>();
-	ops[0x2D] = make_unique<opcode_cb_sda_r<false, r::l>>();
-	ops[0x2E] = make_unique<opcode_cb_sda_m<false, r16::hl>>();
-	ops[0x2F] = make_unique<opcode_cb_sda_r<false, r::a>>();
-	ops[0x30] = make_unique<opcode_cb_swap_r<r::b>>();
-	ops[0x31] = make_unique<opcode_cb_swap_r<r::c>>();
-	ops[0x32] = make_unique<opcode_cb_swap_r<r::d>>();
-	ops[0x33] = make_unique<opcode_cb_swap_r<r::e>>();
-	ops[0x34] = make_unique<opcode_cb_swap_r<r::h>>();
-	ops[0x35] = make_unique<opcode_cb_swap_r<r::l>>();
-	ops[0x36] = make_unique<opcode_cb_swap_m<r16::hl>>();
-	ops[0x37] = make_unique<opcode_cb_swap_r<r::a>>();
-	ops[0x38] = make_unique<opcode_cb_srl_r<r::b>>();
-	ops[0x39] = make_unique<opcode_cb_srl_r<r::c>>();
-	ops[0x3A] = make_unique<opcode_cb_srl_r<r::d>>();
-	ops[0x3B] = make_unique<opcode_cb_srl_r<r::e>>();
-	ops[0x3C] = make_unique<opcode_cb_srl_r<r::h>>();
-	ops[0x3D] = make_unique<opcode_cb_srl_r<r::l>>();
-	ops[0x3E] = make_unique<opcode_cb_srl_m<r16::hl>>();
-	ops[0x3F] = make_unique<opcode_cb_srl_r<r::a>>();
-	ops[0x40] = make_unique<opcode_cb_bit_r<0, r::b>>();
-	ops[0x41] = make_unique<opcode_cb_bit_r<0, r::c>>();
-	ops[0x42] = make_unique<opcode_cb_bit_r<0, r::d>>();
-	ops[0x43] = make_unique<opcode_cb_bit_r<0, r::e>>();
-	ops[0x44] = make_unique<opcode_cb_bit_r<0, r::h>>();
-	ops[0x45] = make_unique<opcode_cb_bit_r<0, r::l>>();
-	ops[0x46] = make_unique<opcode_cb_bit_m<0, r16::hl>>();
-	ops[0x47] = make_unique<opcode_cb_bit_r<0, r::a>>();
-	ops[0x48] = make_unique<opcode_cb_bit_r<1, r::b>>();
-	ops[0x49] = make_unique<opcode_cb_bit_r<1, r::c>>();
-	ops[0x4A] = make_unique<opcode_cb_bit_r<1, r::d>>();
-	ops[0x4B] = make_unique<opcode_cb_bit_r<1, r::e>>();
-	ops[0x4C] = make_unique<opcode_cb_bit_r<1, r::h>>();
-	ops[0x4D] = make_unique<opcode_cb_bit_r<1, r::l>>();
-	ops[0x4E] = make_unique<opcode_cb_bit_m<1, r16::hl>>();
-	ops[0x4F] = make_unique<opcode_cb_bit_r<1, r::a>>();
-	ops[0x50] = make_unique<opcode_cb_bit_r<2, r::b>>();
-	ops[0x51] = make_unique<opcode_cb_bit_r<2, r::c>>();
-	ops[0x52] = make_unique<opcode_cb_bit_r<2, r::d>>();
-	ops[0x53] = make_unique<opcode_cb_bit_r<2, r::e>>();
-	ops[0x54] = make_unique<opcode_cb_bit_r<2, r::h>>();
-	ops[0x55] = make_unique<opcode_cb_bit_r<2, r::l>>();
-	ops[0x56] = make_unique<opcode_cb_bit_m<2, r16::hl>>();
-	ops[0x57] = make_unique<opcode_cb_bit_r<2, r::a>>();
-	ops[0x58] = make_unique<opcode_cb_bit_r<3, r::b>>();
-	ops[0x59] = make_unique<opcode_cb_bit_r<3, r::c>>();
-	ops[0x5A] = make_unique<opcode_cb_bit_r<3, r::d>>();
-	ops[0x5B] = make_unique<opcode_cb_bit_r<3, r::e>>();
-	ops[0x5C] = make_unique<opcode_cb_bit_r<3, r::h>>();
-	ops[0x5D] = make_unique<opcode_cb_bit_r<3, r::l>>();
-	ops[0x5E] = make_unique<opcode_cb_bit_m<3, r16::hl>>();
-	ops[0x5F] = make_unique<opcode_cb_bit_r<3, r::a>>();
-	ops[0x60] = make_unique<opcode_cb_bit_r<4, r::b>>();
-	ops[0x61] = make_unique<opcode_cb_bit_r<4, r::c>>();
-	ops[0x62] = make_unique<opcode_cb_bit_r<4, r::d>>();
-	ops[0x63] = make_unique<opcode_cb_bit_r<4, r::e>>();
-	ops[0x64] = make_unique<opcode_cb_bit_r<4, r::h>>();
-	ops[0x65] = make_unique<opcode_cb_bit_r<4, r::l>>();
-	ops[0x66] = make_unique<opcode_cb_bit_m<4, r16::hl>>();
-	ops[0x67] = make_unique<opcode_cb_bit_r<4, r::a>>();
-	ops[0x68] = make_unique<opcode_cb_bit_r<5, r::b>>();
-	ops[0x69] = make_unique<opcode_cb_bit_r<5, r::c>>();
-	ops[0x6A] = make_unique<opcode_cb_bit_r<5, r::d>>();
-	ops[0x6B] = make_unique<opcode_cb_bit_r<5, r::e>>();
-	ops[0x6C] = make_unique<opcode_cb_bit_r<5, r::h>>();
-	ops[0x6D] = make_unique<opcode_cb_bit_r<5, r::l>>();
-	ops[0x6E] = make_unique<opcode_cb_bit_m<5, r16::hl>>();
-	ops[0x6F] = make_unique<opcode_cb_bit_r<5, r::a>>();
-	ops[0x70] = make_unique<opcode_cb_bit_r<6, r::b>>();
-	ops[0x71] = make_unique<opcode_cb_bit_r<6, r::c>>();
-	ops[0x72] = make_unique<opcode_cb_bit_r<6, r::d>>();
-	ops[0x73] = make_unique<opcode_cb_bit_r<6, r::e>>();
-	ops[0x74] = make_unique<opcode_cb_bit_r<6, r::h>>();
-	ops[0x75] = make_unique<opcode_cb_bit_r<6, r::l>>();
-	ops[0x76] = make_unique<opcode_cb_bit_m<6, r16::hl>>();
-	ops[0x77] = make_unique<opcode_cb_bit_r<6, r::a>>();
-	ops[0x78] = make_unique<opcode_cb_bit_r<7, r::b>>();
-	ops[0x79] = make_unique<opcode_cb_bit_r<7, r::c>>();
-	ops[0x7A] = make_unique<opcode_cb_bit_r<7, r::d>>();
-	ops[0x7B] = make_unique<opcode_cb_bit_r<7, r::e>>();
-	ops[0x7C] = make_unique<opcode_cb_bit_r<7, r::h>>();
-	ops[0x7D] = make_unique<opcode_cb_bit_r<7, r::l>>();
-	ops[0x7E] = make_unique<opcode_cb_bit_m<7, r16::hl>>();
-	ops[0x7F] = make_unique<opcode_cb_bit_r<7, r::a>>();
-	ops[0x80] = make_unique<opcode_cb_resset_r<true, 0, r::b>>();
-	ops[0x81] = make_unique<opcode_cb_resset_r<true, 0, r::c>>();
-	ops[0x82] = make_unique<opcode_cb_resset_r<true, 0, r::d>>();
-	ops[0x83] = make_unique<opcode_cb_resset_r<true, 0, r::e>>();
-	ops[0x84] = make_unique<opcode_cb_resset_r<true, 0, r::h>>();
-	ops[0x85] = make_unique<opcode_cb_resset_r<true, 0, r::l>>();
-	ops[0x86] = make_unique<opcode_cb_resset_m<true, 0, r16::hl>>();
-	ops[0x87] = make_unique<opcode_cb_resset_r<true, 0, r::a>>();
-	ops[0x88] = make_unique<opcode_cb_resset_r<true, 1, r::b>>();
-	ops[0x89] = make_unique<opcode_cb_resset_r<true, 1, r::c>>();
-	ops[0x8A] = make_unique<opcode_cb_resset_r<true, 1, r::d>>();
-	ops[0x8B] = make_unique<opcode_cb_resset_r<true, 1, r::e>>();
-	ops[0x8C] = make_unique<opcode_cb_resset_r<true, 1, r::h>>();
-	ops[0x8D] = make_unique<opcode_cb_resset_r<true, 1, r::l>>();
-	ops[0x8E] = make_unique<opcode_cb_resset_m<true, 1, r16::hl>>();
-	ops[0x8F] = make_unique<opcode_cb_resset_r<true, 1, r::a>>();
-	ops[0x90] = make_unique<opcode_cb_resset_r<true, 2, r::b>>();
-	ops[0x91] = make_unique<opcode_cb_resset_r<true, 2, r::c>>();
-	ops[0x92] = make_unique<opcode_cb_resset_r<true, 2, r::d>>();
-	ops[0x93] = make_unique<opcode_cb_resset_r<true, 2, r::e>>();
-	ops[0x94] = make_unique<opcode_cb_resset_r<true, 2, r::h>>();
-	ops[0x95] = make_unique<opcode_cb_resset_r<true, 2, r::l>>();
-	ops[0x96] = make_unique<opcode_cb_resset_m<true, 2, r16::hl>>();
-	ops[0x97] = make_unique<opcode_cb_resset_r<true, 2, r::a>>();
-	ops[0x98] = make_unique<opcode_cb_resset_r<true, 3, r::b>>();
-	ops[0x99] = make_unique<opcode_cb_resset_r<true, 3, r::c>>();
-	ops[0x9A] = make_unique<opcode_cb_resset_r<true, 3, r::d>>();
-	ops[0x9B] = make_unique<opcode_cb_resset_r<true, 3, r::e>>();
-	ops[0x9C] = make_unique<opcode_cb_resset_r<true, 3, r::h>>();
-	ops[0x9D] = make_unique<opcode_cb_resset_r<true, 3, r::l>>();
-	ops[0x9E] = make_unique<opcode_cb_resset_m<true, 3, r16::hl>>();
-	ops[0x9F] = make_unique<opcode_cb_resset_r<true, 3, r::a>>();
-	ops[0xA0] = make_unique<opcode_cb_resset_r<true, 4, r::b>>();
-	ops[0xA1] = make_unique<opcode_cb_resset_r<true, 4, r::c>>();
-	ops[0xA2] = make_unique<opcode_cb_resset_r<true, 4, r::d>>();
-	ops[0xA3] = make_unique<opcode_cb_resset_r<true, 4, r::e>>();
-	ops[0xA4] = make_unique<opcode_cb_resset_r<true, 4, r::h>>();
-	ops[0xA5] = make_unique<opcode_cb_resset_r<true, 4, r::l>>();
-	ops[0xA6] = make_unique<opcode_cb_resset_m<true, 4, r16::hl>>();
-	ops[0xA7] = make_unique<opcode_cb_resset_r<true, 4, r::a>>();
-	ops[0xA8] = make_unique<opcode_cb_resset_r<true, 5, r::b>>();
-	ops[0xA9] = make_unique<opcode_cb_resset_r<true, 5, r::c>>();
-	ops[0xAA] = make_unique<opcode_cb_resset_r<true, 5, r::d>>();
-	ops[0xAB] = make_unique<opcode_cb_resset_r<true, 5, r::e>>();
-	ops[0xAC] = make_unique<opcode_cb_resset_r<true, 5, r::h>>();
-	ops[0xAD] = make_unique<opcode_cb_resset_r<true, 5, r::l>>();
-	ops[0xAE] = make_unique<opcode_cb_resset_m<true, 5, r16::hl>>();
-	ops[0xAF] = make_unique<opcode_cb_resset_r<true, 5, r::a>>();
-	ops[0xB0] = make_unique<opcode_cb_resset_r<true, 6, r::b>>();
-	ops[0xB1] = make_unique<opcode_cb_resset_r<true, 6, r::c>>();
-	ops[0xB2] = make_unique<opcode_cb_resset_r<true, 6, r::d>>();
-	ops[0xB3] = make_unique<opcode_cb_resset_r<true, 6, r::e>>();
-	ops[0xB4] = make_unique<opcode_cb_resset_r<true, 6, r::h>>();
-	ops[0xB5] = make_unique<opcode_cb_resset_r<true, 6, r::l>>();
-	ops[0xB6] = make_unique<opcode_cb_resset_m<true, 6, r16::hl>>();
-	ops[0xB7] = make_unique<opcode_cb_resset_r<true, 6, r::a>>();
-	ops[0xB8] = make_unique<opcode_cb_resset_r<true, 7, r::b>>();
-	ops[0xB9] = make_unique<opcode_cb_resset_r<true, 7, r::c>>();
-	ops[0xBA] = make_unique<opcode_cb_resset_r<true, 7, r::d>>();
-	ops[0xBB] = make_unique<opcode_cb_resset_r<true, 7, r::e>>();
-	ops[0xBC] = make_unique<opcode_cb_resset_r<true, 7, r::h>>();
-	ops[0xBD] = make_unique<opcode_cb_resset_r<true, 7, r::l>>();
-	ops[0xBE] = make_unique<opcode_cb_resset_m<true, 7, r16::hl>>();
-	ops[0xBF] = make_unique<opcode_cb_resset_r<true, 7, r::a>>();
-	ops[0xC0] = make_unique<opcode_cb_resset_r<false, 0, r::b>>();
-	ops[0xC1] = make_unique<opcode_cb_resset_r<false, 0, r::c>>();
-	ops[0xC2] = make_unique<opcode_cb_resset_r<false, 0, r::d>>();
-	ops[0xC3] = make_unique<opcode_cb_resset_r<false, 0, r::e>>();
-	ops[0xC4] = make_unique<opcode_cb_resset_r<false, 0, r::h>>();
-	ops[0xC5] = make_unique<opcode_cb_resset_r<false, 0, r::l>>();
-	ops[0xC6] = make_unique<opcode_cb_resset_m<false, 0, r16::hl>>();
-	ops[0xC7] = make_unique<opcode_cb_resset_r<false, 0, r::a>>();
-	ops[0xC8] = make_unique<opcode_cb_resset_r<false, 1, r::b>>();
-	ops[0xC9] = make_unique<opcode_cb_resset_r<false, 1, r::c>>();
-	ops[0xCA] = make_unique<opcode_cb_resset_r<false, 1, r::d>>();
-	ops[0xCB] = make_unique<opcode_cb_resset_r<false, 1, r::e>>();
-	ops[0xCC] = make_unique<opcode_cb_resset_r<false, 1, r::h>>();
-	ops[0xCD] = make_unique<opcode_cb_resset_r<false, 1, r::l>>();
-	ops[0xCE] = make_unique<opcode_cb_resset_m<false, 1, r16::hl>>();
-	ops[0xCF] = make_unique<opcode_cb_resset_r<false, 1, r::a>>();
-	ops[0xD0] = make_unique<opcode_cb_resset_r<false, 2, r::b>>();
-	ops[0xD1] = make_unique<opcode_cb_resset_r<false, 2, r::c>>();
-	ops[0xD2] = make_unique<opcode_cb_resset_r<false, 2, r::d>>();
-	ops[0xD3] = make_unique<opcode_cb_resset_r<false, 2, r::e>>();
-	ops[0xD4] = make_unique<opcode_cb_resset_r<false, 2, r::h>>();
-	ops[0xD5] = make_unique<opcode_cb_resset_r<false, 2, r::l>>();
-	ops[0xD6] = make_unique<opcode_cb_resset_m<false, 2, r16::hl>>();
-	ops[0xD7] = make_unique<opcode_cb_resset_r<false, 2, r::a>>();
-	ops[0xD8] = make_unique<opcode_cb_resset_r<false, 3, r::b>>();
-	ops[0xD9] = make_unique<opcode_cb_resset_r<false, 3, r::c>>();
-	ops[0xDA] = make_unique<opcode_cb_resset_r<false, 3, r::d>>();
-	ops[0xDB] = make_unique<opcode_cb_resset_r<false, 3, r::e>>();
-	ops[0xDC] = make_unique<opcode_cb_resset_r<false, 3, r::h>>();
-	ops[0xDD] = make_unique<opcode_cb_resset_r<false, 3, r::l>>();
-	ops[0xDE] = make_unique<opcode_cb_resset_m<false, 3, r16::hl>>();
-	ops[0xDF] = make_unique<opcode_cb_resset_r<false, 3, r::a>>();
-	ops[0xE0] = make_unique<opcode_cb_resset_r<false, 4, r::b>>();
-	ops[0xE1] = make_unique<opcode_cb_resset_r<false, 4, r::c>>();
-	ops[0xE2] = make_unique<opcode_cb_resset_r<false, 4, r::d>>();
-	ops[0xE3] = make_unique<opcode_cb_resset_r<false, 4, r::e>>();
-	ops[0xE4] = make_unique<opcode_cb_resset_r<false, 4, r::h>>();
-	ops[0xE5] = make_unique<opcode_cb_resset_r<false, 4, r::l>>();
-	ops[0xE6] = make_unique<opcode_cb_resset_m<false, 4, r16::hl>>();
-	ops[0xE7] = make_unique<opcode_cb_resset_r<false, 4, r::a>>();
-	ops[0xE8] = make_unique<opcode_cb_resset_r<false, 5, r::b>>();
-	ops[0xE9] = make_unique<opcode_cb_resset_r<false, 5, r::c>>();
-	ops[0xEA] = make_unique<opcode_cb_resset_r<false, 5, r::d>>();
-	ops[0xEB] = make_unique<opcode_cb_resset_r<false, 5, r::e>>();
-	ops[0xEC] = make_unique<opcode_cb_resset_r<false, 5, r::h>>();
-	ops[0xED] = make_unique<opcode_cb_resset_r<false, 5, r::l>>();
-	ops[0xEE] = make_unique<opcode_cb_resset_m<false, 5, r16::hl>>();
-	ops[0xEF] = make_unique<opcode_cb_resset_r<false, 5, r::a>>();
-	ops[0xF0] = make_unique<opcode_cb_resset_r<false, 6, r::b>>();
-	ops[0xF1] = make_unique<opcode_cb_resset_r<false, 6, r::c>>();
-	ops[0xF2] = make_unique<opcode_cb_resset_r<false, 6, r::d>>();
-	ops[0xF3] = make_unique<opcode_cb_resset_r<false, 6, r::e>>();
-	ops[0xF4] = make_unique<opcode_cb_resset_r<false, 6, r::h>>();
-	ops[0xF5] = make_unique<opcode_cb_resset_r<false, 6, r::l>>();
-	ops[0xF6] = make_unique<opcode_cb_resset_m<false, 6, r16::hl>>();
-	ops[0xF7] = make_unique<opcode_cb_resset_r<false, 6, r::a>>();
-	ops[0xF8] = make_unique<opcode_cb_resset_r<false, 7, r::b>>();
-	ops[0xF9] = make_unique<opcode_cb_resset_r<false, 7, r::c>>();
-	ops[0xFA] = make_unique<opcode_cb_resset_r<false, 7, r::d>>();
-	ops[0xFB] = make_unique<opcode_cb_resset_r<false, 7, r::e>>();
-	ops[0xFC] = make_unique<opcode_cb_resset_r<false, 7, r::h>>();
-	ops[0xFD] = make_unique<opcode_cb_resset_r<false, 7, r::l>>();
-	ops[0xFE] = make_unique<opcode_cb_resset_m<false, 7, r16::hl>>();
-	ops[0xFF] = make_unique<opcode_cb_resset_r<false, 7, r::a>>();
-}
+const gb::opcode_table gb::opcodes{{
+	/* ops[0x00] = */ opcode_nop(),
+	/* ops[0x01] = */ opcode_ld16_ri<r16::bc>(),
+	/* ops[0x02] = */ opcode_ld_mr<r16::bc, r8::a>(),
+	/* ops[0x03] = */ opcode_decinc16_r<false, r16::bc>(),
+	/* ops[0x04] = */ opcode_decinc_r<false, r8::b>(),
+	/* ops[0x05] = */ opcode_decinc_r<true, r8::b>(),
+	/* ops[0x06] = */ opcode_ld_ri<r8::b>(),
+	/* ops[0x07] = */ opcode_rda<true, true>(),
+	/* ops[0x08] = */ opcode_ld16_mir<r16::sp>(),
+	/* ops[0x09] = */ opcode_add16_hl<r16::bc>(),
+	/* ops[0x0A] = */ opcode_ld_rm<r8::a, r16::bc>(),
+	/* ops[0x0B] = */ opcode_decinc16_r<true, r16::bc>(),
+	/* ops[0x0C] = */ opcode_decinc_r<false, r8::c>(),
+	/* ops[0x0D] = */ opcode_decinc_r<true, r8::c>(),
+	/* ops[0x0E] = */ opcode_ld_ri<r8::c>(),
+	/* ops[0x0F] = */ opcode_rda<false, true>(),
+	/* ops[0x10] = */ opcode_stop(),
+	/* ops[0x11] = */ opcode_ld16_ri<r16::de>(),
+	/* ops[0x12] = */ opcode_ld_mr<r16::de, r8::a>(),
+	/* ops[0x13] = */ opcode_decinc16_r<false, r16::de>(),
+	/* ops[0x14] = */ opcode_decinc_r<false, r8::d>(),
+	/* ops[0x15] = */ opcode_decinc_r<true, r8::d>(),
+	/* ops[0x16] = */ opcode_ld_ri<r8::d>(),
+	/* ops[0x17] = */ opcode_rda<true, false>(),
+	/* ops[0x18] = */ opcode_jr_i<cond::nop>(),
+	/* ops[0x19] = */ opcode_add16_hl<r16::de>(),
+	/* ops[0x1A] = */ opcode_ld_rm<r8::a, r16::de>(),
+	/* ops[0x1B] = */ opcode_decinc16_r<true, r16::de>(),
+	/* ops[0x1C] = */ opcode_decinc_r<false, r8::e>(),
+	/* ops[0x1D] = */ opcode_decinc_r<true, r8::e>(),
+	/* ops[0x1E] = */ opcode_ld_ri<r8::e>(),
+	/* ops[0x1F] = */ opcode_rda<false, false>(),
+	/* ops[0x20] = */ opcode_jr_i<cond::nz>(),
+	/* ops[0x21] = */ opcode_ld16_ri<r16::hl>(),
+	/* ops[0x22] = */ opcode_lddi<false, false>(),
+	/* ops[0x23] = */ opcode_decinc16_r<false, r16::hl>(),
+	/* ops[0x24] = */ opcode_decinc_r<false, r8::h>(),
+	/* ops[0x25] = */ opcode_decinc_r<true, r8::h>(),
+	/* ops[0x26] = */ opcode_ld_ri<r8::h>(),
+	/* ops[0x27] = */ opcode_daa(),
+	/* ops[0x28] = */ opcode_jr_i<cond::z>(),
+	/* ops[0x29] = */ opcode_add16_hl<r16::hl>(),
+	/* ops[0x2A] = */ opcode_lddi<false, true>(),
+	/* ops[0x2B] = */ opcode_decinc16_r<true, r16::hl>(),
+	/* ops[0x2C] = */ opcode_decinc_r<false, r8::l>(),
+	/* ops[0x2D] = */ opcode_decinc_r<true, r8::l>(),
+	/* ops[0x2E] = */ opcode_ld_ri<r8::l>(),
+	/* ops[0x2F] = */ opcode_cpl(),
+	/* ops[0x30] = */ opcode_jr_i<cond::nc>(),
+	/* ops[0x31] = */ opcode_ld16_ri<r16::sp>(),
+	/* ops[0x32] = */ opcode_lddi<true, false>(),
+	/* ops[0x33] = */ opcode_decinc16_r<false, r16::sp>(),
+	/* ops[0x34] = */ opcode_decinc_rm<false, r16::hl>(),
+	/* ops[0x35] = */ opcode_decinc_rm<true, r16::hl>(),
+	/* ops[0x36] = */ opcode_ld_mi<r16::hl>(),
+	/* ops[0x37] = */ opcode_scf(),
+	/* ops[0x38] = */ opcode_jr_i<cond::c>(),
+	/* ops[0x39] = */ opcode_add16_hl<r16::sp>(),
+	/* ops[0x3A] = */ opcode_lddi<true, true>(),
+	/* ops[0x3B] = */ opcode_decinc16_r<true, r16::sp>(),
+	/* ops[0x3C] = */ opcode_decinc_r<false, r8::a>(),
+	/* ops[0x3D] = */ opcode_decinc_r<true, r8::a>(),
+	/* ops[0x3E] = */ opcode_ld_ri<r8::a>(),
+	/* ops[0x3F] = */ opcode_ccf(),
+	/* ops[0x40] = */ opcode_ld_rr<r8::b, r8::b>(),
+	/* ops[0x41] = */ opcode_ld_rr<r8::b, r8::c>(),
+	/* ops[0x42] = */ opcode_ld_rr<r8::b, r8::d>(),
+	/* ops[0x43] = */ opcode_ld_rr<r8::b, r8::e>(),
+	/* ops[0x44] = */ opcode_ld_rr<r8::b, r8::h>(),
+	/* ops[0x45] = */ opcode_ld_rr<r8::b, r8::l>(),
+	/* ops[0x46] = */ opcode_ld_rm<r8::b, r16::hl>(),
+	/* ops[0x47] = */ opcode_ld_rr<r8::b, r8::a>(),
+	/* ops[0x48] = */ opcode_ld_rr<r8::c, r8::b>(),
+	/* ops[0x49] = */ opcode_ld_rr<r8::c, r8::c>(),
+	/* ops[0x4A] = */ opcode_ld_rr<r8::c, r8::d>(),
+	/* ops[0x4B] = */ opcode_ld_rr<r8::c, r8::e>(),
+	/* ops[0x4C] = */ opcode_ld_rr<r8::c, r8::h>(),
+	/* ops[0x4D] = */ opcode_ld_rr<r8::c, r8::l>(),
+	/* ops[0x4E] = */ opcode_ld_rm<r8::c, r16::hl>(),
+	/* ops[0x4F] = */ opcode_ld_rr<r8::c, r8::a>(),
+	/* ops[0x50] = */ opcode_ld_rr<r8::d, r8::b>(),
+	/* ops[0x51] = */ opcode_ld_rr<r8::d, r8::c>(),
+	/* ops[0x52] = */ opcode_ld_rr<r8::d, r8::d>(),
+	/* ops[0x53] = */ opcode_ld_rr<r8::d, r8::e>(),
+	/* ops[0x54] = */ opcode_ld_rr<r8::d, r8::h>(),
+	/* ops[0x55] = */ opcode_ld_rr<r8::d, r8::l>(),
+	/* ops[0x56] = */ opcode_ld_rm<r8::d, r16::hl>(),
+	/* ops[0x57] = */ opcode_ld_rr<r8::d, r8::a>(),
+	/* ops[0x58] = */ opcode_ld_rr<r8::e, r8::b>(),
+	/* ops[0x59] = */ opcode_ld_rr<r8::e, r8::c>(),
+	/* ops[0x5A] = */ opcode_ld_rr<r8::e, r8::d>(),
+	/* ops[0x5B] = */ opcode_ld_rr<r8::e, r8::e>(),
+	/* ops[0x5C] = */ opcode_ld_rr<r8::e, r8::h>(),
+	/* ops[0x5D] = */ opcode_ld_rr<r8::e, r8::l>(),
+	/* ops[0x5E] = */ opcode_ld_rm<r8::e, r16::hl>(),
+	/* ops[0x5F] = */ opcode_ld_rr<r8::e, r8::a>(),
+	/* ops[0x60] = */ opcode_ld_rr<r8::h, r8::b>(),
+	/* ops[0x61] = */ opcode_ld_rr<r8::h, r8::c>(),
+	/* ops[0x62] = */ opcode_ld_rr<r8::h, r8::d>(),
+	/* ops[0x63] = */ opcode_ld_rr<r8::h, r8::e>(),
+	/* ops[0x64] = */ opcode_ld_rr<r8::h, r8::h>(),
+	/* ops[0x65] = */ opcode_ld_rr<r8::h, r8::l>(),
+	/* ops[0x66] = */ opcode_ld_rm<r8::h, r16::hl>(),
+	/* ops[0x67] = */ opcode_ld_rr<r8::h, r8::a>(),
+	/* ops[0x68] = */ opcode_ld_rr<r8::l, r8::b>(),
+	/* ops[0x69] = */ opcode_ld_rr<r8::l, r8::c>(),
+	/* ops[0x6A] = */ opcode_ld_rr<r8::l, r8::d>(),
+	/* ops[0x6B] = */ opcode_ld_rr<r8::l, r8::e>(),
+	/* ops[0x6C] = */ opcode_ld_rr<r8::l, r8::h>(),
+	/* ops[0x6D] = */ opcode_ld_rr<r8::l, r8::l>(),
+	/* ops[0x6E] = */ opcode_ld_rm<r8::l, r16::hl>(),
+	/* ops[0x6F] = */ opcode_ld_rr<r8::l, r8::a>(),
+	/* ops[0x70] = */ opcode_ld_mr<r16::hl, r8::b>(),
+	/* ops[0x71] = */ opcode_ld_mr<r16::hl, r8::c>(),
+	/* ops[0x72] = */ opcode_ld_mr<r16::hl, r8::d>(),
+	/* ops[0x73] = */ opcode_ld_mr<r16::hl, r8::e>(),
+	/* ops[0x74] = */ opcode_ld_mr<r16::hl, r8::h>(),
+	/* ops[0x75] = */ opcode_ld_mr<r16::hl, r8::l>(),
+	/* ops[0x76] = */ opcode_halt(),
+	/* ops[0x77] = */ opcode_ld_mr<r16::hl, r8::a>(),
+	/* ops[0x78] = */ opcode_ld_rr<r8::a, r8::b>(),
+	/* ops[0x79] = */ opcode_ld_rr<r8::a, r8::c>(),
+	/* ops[0x7A] = */ opcode_ld_rr<r8::a, r8::d>(),
+	/* ops[0x7B] = */ opcode_ld_rr<r8::a, r8::e>(),
+	/* ops[0x7C] = */ opcode_ld_rr<r8::a, r8::h>(),
+	/* ops[0x7D] = */ opcode_ld_rr<r8::a, r8::l>(),
+	/* ops[0x7E] = */ opcode_ld_rm<r8::a, r16::hl>(),
+	/* ops[0x7F] = */ opcode_ld_rr<r8::a, r8::a>(),
+	/* ops[0x80] = */ opcode_alu_rr<operation::add, r8::a, r8::b>(),
+	/* ops[0x81] = */ opcode_alu_rr<operation::add, r8::a, r8::c>(),
+	/* ops[0x82] = */ opcode_alu_rr<operation::add, r8::a, r8::d>(),
+	/* ops[0x83] = */ opcode_alu_rr<operation::add, r8::a, r8::e>(),
+	/* ops[0x84] = */ opcode_alu_rr<operation::add, r8::a, r8::h>(),
+	/* ops[0x85] = */ opcode_alu_rr<operation::add, r8::a, r8::l>(),
+	/* ops[0x86] = */ opcode_alu_rm<operation::add, r8::a, r16::hl>(),
+	/* ops[0x87] = */ opcode_alu_rr<operation::add, r8::a, r8::a>(),
+	/* ops[0x88] = */ opcode_alu_rr<operation::adc, r8::a, r8::b>(),
+	/* ops[0x89] = */ opcode_alu_rr<operation::adc, r8::a, r8::c>(),
+	/* ops[0x8A] = */ opcode_alu_rr<operation::adc, r8::a, r8::d>(),
+	/* ops[0x8B] = */ opcode_alu_rr<operation::adc, r8::a, r8::e>(),
+	/* ops[0x8C] = */ opcode_alu_rr<operation::adc, r8::a, r8::h>(),
+	/* ops[0x8D] = */ opcode_alu_rr<operation::adc, r8::a, r8::l>(),
+	/* ops[0x8E] = */ opcode_alu_rm<operation::adc, r8::a, r16::hl>(),
+	/* ops[0x8F] = */ opcode_alu_rr<operation::adc, r8::a, r8::a>(),
+	/* ops[0x90] = */ opcode_alu_rr<operation::sub, r8::a, r8::b>(),
+	/* ops[0x91] = */ opcode_alu_rr<operation::sub, r8::a, r8::c>(),
+	/* ops[0x92] = */ opcode_alu_rr<operation::sub, r8::a, r8::d>(),
+	/* ops[0x93] = */ opcode_alu_rr<operation::sub, r8::a, r8::e>(),
+	/* ops[0x94] = */ opcode_alu_rr<operation::sub, r8::a, r8::h>(),
+	/* ops[0x95] = */ opcode_alu_rr<operation::sub, r8::a, r8::l>(),
+	/* ops[0x96] = */ opcode_alu_rm<operation::sub, r8::a, r16::hl>(),
+	/* ops[0x97] = */ opcode_alu_rr<operation::sub, r8::a, r8::a>(),
+	/* ops[0x98] = */ opcode_alu_rr<operation::sbc, r8::a, r8::b>(),
+	/* ops[0x99] = */ opcode_alu_rr<operation::sbc, r8::a, r8::c>(),
+	/* ops[0x9A] = */ opcode_alu_rr<operation::sbc, r8::a, r8::d>(),
+	/* ops[0x9B] = */ opcode_alu_rr<operation::sbc, r8::a, r8::e>(),
+	/* ops[0x9C] = */ opcode_alu_rr<operation::sbc, r8::a, r8::h>(),
+	/* ops[0x9D] = */ opcode_alu_rr<operation::sbc, r8::a, r8::l>(),
+	/* ops[0x9E] = */ opcode_alu_rm<operation::sbc, r8::a, r16::hl>(),
+	/* ops[0x9F] = */ opcode_alu_rr<operation::sbc, r8::a, r8::a>(),
+	/* ops[0xA0] = */ opcode_alu_rr<operation::and_, r8::a, r8::b>(),
+	/* ops[0xA1] = */ opcode_alu_rr<operation::and_, r8::a, r8::c>(),
+	/* ops[0xA2] = */ opcode_alu_rr<operation::and_, r8::a, r8::d>(),
+	/* ops[0xA3] = */ opcode_alu_rr<operation::and_, r8::a, r8::e>(),
+	/* ops[0xA4] = */ opcode_alu_rr<operation::and_, r8::a, r8::h>(),
+	/* ops[0xA5] = */ opcode_alu_rr<operation::and_, r8::a, r8::l>(),
+	/* ops[0xA6] = */ opcode_alu_rm<operation::and_, r8::a, r16::hl>(),
+	/* ops[0xA7] = */ opcode_alu_rr<operation::and_, r8::a, r8::a>(),
+	/* ops[0xA8] = */ opcode_alu_rr<operation::xor_, r8::a, r8::b>(),
+	/* ops[0xA9] = */ opcode_alu_rr<operation::xor_, r8::a, r8::c>(),
+	/* ops[0xAA] = */ opcode_alu_rr<operation::xor_, r8::a, r8::d>(),
+	/* ops[0xAB] = */ opcode_alu_rr<operation::xor_, r8::a, r8::e>(),
+	/* ops[0xAC] = */ opcode_alu_rr<operation::xor_, r8::a, r8::h>(),
+	/* ops[0xAD] = */ opcode_alu_rr<operation::xor_, r8::a, r8::l>(),
+	/* ops[0xAE] = */ opcode_alu_rm<operation::xor_, r8::a, r16::hl>(),
+	/* ops[0xAF] = */ opcode_alu_rr<operation::xor_, r8::a, r8::a>(),
+	/* ops[0xB0] = */ opcode_alu_rr<operation::or_, r8::a, r8::b>(),
+	/* ops[0xB1] = */ opcode_alu_rr<operation::or_, r8::a, r8::c>(),
+	/* ops[0xB2] = */ opcode_alu_rr<operation::or_, r8::a, r8::d>(),
+	/* ops[0xB3] = */ opcode_alu_rr<operation::or_, r8::a, r8::e>(),
+	/* ops[0xB4] = */ opcode_alu_rr<operation::or_, r8::a, r8::h>(),
+	/* ops[0xB5] = */ opcode_alu_rr<operation::or_, r8::a, r8::l>(),
+	/* ops[0xB6] = */ opcode_alu_rm<operation::or_, r8::a, r16::hl>(),
+	/* ops[0xB7] = */ opcode_alu_rr<operation::or_, r8::a, r8::a>(),
+	/* ops[0xB8] = */ opcode_alu_rr<operation::cp, r8::a, r8::b>(),
+	/* ops[0xB9] = */ opcode_alu_rr<operation::cp, r8::a, r8::c>(),
+	/* ops[0xBA] = */ opcode_alu_rr<operation::cp, r8::a, r8::d>(),
+	/* ops[0xBB] = */ opcode_alu_rr<operation::cp, r8::a, r8::e>(),
+	/* ops[0xBC] = */ opcode_alu_rr<operation::cp, r8::a, r8::h>(),
+	/* ops[0xBD] = */ opcode_alu_rr<operation::cp, r8::a, r8::l>(),
+	/* ops[0xBE] = */ opcode_alu_rm<operation::cp, r8::a, r16::hl>(),
+	/* ops[0xBF] = */ opcode_alu_rr<operation::cp, r8::a, r8::a>(),
+	/* ops[0xC0] = */ opcode_ret<cond::nz, false>(),
+	/* ops[0xC1] = */ opcode_pop<r16::bc>(),
+	/* ops[0xC2] = */ opcode_jp_i<cond::nz>(),
+	/* ops[0xC3] = */ opcode_jp_i<cond::nop>(),
+	/* ops[0xC4] = */ opcode_call<cond::nz>(),
+	/* ops[0xC5] = */ opcode_push<r16::bc>(),
+	/* ops[0xC6] = */ opcode_alu_ri<operation::add, r8::a>(),
+	/* ops[0xC7] = */ opcode_rst<0x00>(),
+	/* ops[0xC8] = */ opcode_ret<cond::z, false>(),
+	/* ops[0xC9] = */ opcode_ret<cond::nop, false>(),
+	/* ops[0xCA] = */ opcode_jp_i<cond::z>(),
+	/* ops[0xCB] = */ opcode_hang(),
+	/* ops[0xCC] = */ opcode_call<cond::z>(),
+	/* ops[0xCD] = */ opcode_call<cond::nop>(),
+	/* ops[0xCE] = */ opcode_alu_ri<operation::adc, r8::a>(),
+	/* ops[0xCF] = */ opcode_rst<0x08>(),
+	/* ops[0xD0] = */ opcode_ret<cond::nc, false>(),
+	/* ops[0xD1] = */ opcode_pop<r16::de>(),
+	/* ops[0xD2] = */ opcode_jp_i<cond::nc>(),
+	/* ops[0xD3] = */ opcode_hang(),
+	/* ops[0xD4] = */ opcode_call<cond::nc>(),
+	/* ops[0xD5] = */ opcode_push<r16::de>(),
+	/* ops[0xD6] = */ opcode_alu_ri<operation::sub, r8::a>(),
+	/* ops[0xD7] = */ opcode_rst<0x10>(),
+	/* ops[0xD8] = */ opcode_ret<cond::c, false>(),
+	/* ops[0xD9] = */ opcode_ret<cond::nop, true>(),
+	/* ops[0xDA] = */ opcode_jp_i<cond::c>(),
+	/* ops[0xDB] = */ opcode_hang(),
+	/* ops[0xDC] = */ opcode_call<cond::c>(),
+	/* ops[0xDD] = */ opcode_hang(),
+	/* ops[0xDE] = */ opcode_alu_ri<operation::sbc, r8::a>(),
+	/* ops[0xDF] = */ opcode_rst<0x18>(),
+	/* ops[0xE0] = */ opcode_ldff_ia(),
+	/* ops[0xE1] = */ opcode_pop<r16::hl>(),
+	/* ops[0xE2] = */ opcode_ldff_ca(),
+	/* ops[0xE3] = */ opcode_hang(),
+	/* ops[0xE4] = */ opcode_hang(),
+	/* ops[0xE5] = */ opcode_push<r16::hl>(),
+	/* ops[0xE6] = */ opcode_alu_ri<operation::and_, r8::a>(),
+	/* ops[0xE7] = */ opcode_rst<0x20>(),
+	/* ops[0xE8] = */ opcode_add16_sp_i(),
+	/* ops[0xE9] = */ opcode_jp_hl(),
+	/* ops[0xEA] = */ opcode_ld_mir<r8::a>(),
+	/* ops[0xEB] = */ opcode_hang(),
+	/* ops[0xEC] = */ opcode_hang(),
+	/* ops[0xED] = */ opcode_hang(),
+	/* ops[0xEE] = */ opcode_alu_ri<operation::xor_, r8::a>(),
+	/* ops[0xEF] = */ opcode_rst<0x28>(),
+	/* ops[0xF0] = */ opcode_ldff_ai(),
+	/* ops[0xF1] = */ opcode_pop<r16::af>(),
+	/* ops[0xF2] = */ opcode_ldff_ac(),
+	/* ops[0xF3] = */ opcode_di(),
+	/* ops[0xF4] = */ opcode_hang(),
+	/* ops[0xF5] = */ opcode_push<r16::af>(),
+	/* ops[0xF6] = */ opcode_alu_ri<operation::or_, r8::a>(),
+	/* ops[0xF7] = */ opcode_rst<0x30>(),
+	/* ops[0xF8] = */ opcode_ld16_hlspn(),
+	/* ops[0xF9] = */ opcode_ld16_rr<r16::sp, r16::hl>(),
+	/* ops[0xFA] = */ opcode_ld_rmi<r8::a>(),
+	/* ops[0xFB] = */ opcode_ei(),
+	/* ops[0xFC] = */ opcode_hang(),
+	/* ops[0xFD] = */ opcode_hang(),
+	/* ops[0xFE] = */ opcode_alu_ri<operation::cp, r8::a>(),
+	/* ops[0xFF] = */ opcode_rst<0x38>()
+}};
 
-}
-
-gb::opcode::opcode(std::string mnemonic, int extra_bytes, int cycles) :
-	_mnemonic(std::move(mnemonic)),
-	_extra_bytes(extra_bytes),
-	_cycles(cycles)
-{
-}
-
-const gb::opcode_table &gb::opcodes()
-{
-	std::call_once(opcodes_table_once, init_opcodes);
-	return opcodes_table;
-}
-
-const gb::opcode_table &gb::cb_opcodes()
-{
-	std::call_once(cb_opcodes_table_once, init_cb_opcodes);
-	return cb_opcodes_table;
-}
+const gb::opcode_table gb::cb_opcodes{{
+	/* cb[0x00] = */ opcode_cb_rdc_r<true, true, r8::b>(),
+	/* cb[0x01] = */ opcode_cb_rdc_r<true, true, r8::c>(),
+	/* cb[0x02] = */ opcode_cb_rdc_r<true, true, r8::d>(),
+	/* cb[0x03] = */ opcode_cb_rdc_r<true, true, r8::e>(),
+	/* cb[0x04] = */ opcode_cb_rdc_r<true, true, r8::h>(),
+	/* cb[0x05] = */ opcode_cb_rdc_r<true, true, r8::l>(),
+	/* cb[0x06] = */ opcode_cb_rdc_m<true, true, r16::hl>(),
+	/* cb[0x07] = */ opcode_cb_rdc_r<true, true, r8::a>(),
+	/* cb[0x08] = */ opcode_cb_rdc_r<false, true, r8::b>(),
+	/* cb[0x09] = */ opcode_cb_rdc_r<false, true, r8::c>(),
+	/* cb[0x0A] = */ opcode_cb_rdc_r<false, true, r8::d>(),
+	/* cb[0x0B] = */ opcode_cb_rdc_r<false, true, r8::e>(),
+	/* cb[0x0C] = */ opcode_cb_rdc_r<false, true, r8::h>(),
+	/* cb[0x0D] = */ opcode_cb_rdc_r<false, true, r8::l>(),
+	/* cb[0x0E] = */ opcode_cb_rdc_m<false, true, r16::hl>(),
+	/* cb[0x0F] = */ opcode_cb_rdc_r<false, true, r8::a>(),
+	/* cb[0x10] = */ opcode_cb_rdc_r<true, false, r8::b>(),
+	/* cb[0x11] = */ opcode_cb_rdc_r<true, false, r8::c>(),
+	/* cb[0x12] = */ opcode_cb_rdc_r<true, false, r8::d>(),
+	/* cb[0x13] = */ opcode_cb_rdc_r<true, false, r8::e>(),
+	/* cb[0x14] = */ opcode_cb_rdc_r<true, false, r8::h>(),
+	/* cb[0x15] = */ opcode_cb_rdc_r<true, false, r8::l>(),
+	/* cb[0x16] = */ opcode_cb_rdc_m<true, false, r16::hl>(),
+	/* cb[0x17] = */ opcode_cb_rdc_r<true, false, r8::a>(),
+	/* cb[0x18] = */ opcode_cb_rdc_r<false, false, r8::b>(),
+	/* cb[0x19] = */ opcode_cb_rdc_r<false, false, r8::c>(),
+	/* cb[0x1A] = */ opcode_cb_rdc_r<false, false, r8::d>(),
+	/* cb[0x1B] = */ opcode_cb_rdc_r<false, false, r8::e>(),
+	/* cb[0x1C] = */ opcode_cb_rdc_r<false, false, r8::h>(),
+	/* cb[0x1D] = */ opcode_cb_rdc_r<false, false, r8::l>(),
+	/* cb[0x1E] = */ opcode_cb_rdc_m<false, false, r16::hl>(),
+	/* cb[0x1F] = */ opcode_cb_rdc_r<false, false, r8::a>(),
+	/* cb[0x20] = */ opcode_cb_sda_r<true, r8::b>(),
+	/* cb[0x21] = */ opcode_cb_sda_r<true, r8::c>(),
+	/* cb[0x22] = */ opcode_cb_sda_r<true, r8::d>(),
+	/* cb[0x23] = */ opcode_cb_sda_r<true, r8::e>(),
+	/* cb[0x24] = */ opcode_cb_sda_r<true, r8::h>(),
+	/* cb[0x25] = */ opcode_cb_sda_r<true, r8::l>(),
+	/* cb[0x26] = */ opcode_cb_sda_m<true, r16::hl>(),
+	/* cb[0x27] = */ opcode_cb_sda_r<true, r8::a>(),
+	/* cb[0x28] = */ opcode_cb_sda_r<false, r8::b>(),
+	/* cb[0x29] = */ opcode_cb_sda_r<false, r8::c>(),
+	/* cb[0x2A] = */ opcode_cb_sda_r<false, r8::d>(),
+	/* cb[0x2B] = */ opcode_cb_sda_r<false, r8::e>(),
+	/* cb[0x2C] = */ opcode_cb_sda_r<false, r8::h>(),
+	/* cb[0x2D] = */ opcode_cb_sda_r<false, r8::l>(),
+	/* cb[0x2E] = */ opcode_cb_sda_m<false, r16::hl>(),
+	/* cb[0x2F] = */ opcode_cb_sda_r<false, r8::a>(),
+	/* cb[0x30] = */ opcode_cb_swap_r<r8::b>(),
+	/* cb[0x31] = */ opcode_cb_swap_r<r8::c>(),
+	/* cb[0x32] = */ opcode_cb_swap_r<r8::d>(),
+	/* cb[0x33] = */ opcode_cb_swap_r<r8::e>(),
+	/* cb[0x34] = */ opcode_cb_swap_r<r8::h>(),
+	/* cb[0x35] = */ opcode_cb_swap_r<r8::l>(),
+	/* cb[0x36] = */ opcode_cb_swap_m<r16::hl>(),
+	/* cb[0x37] = */ opcode_cb_swap_r<r8::a>(),
+	/* cb[0x38] = */ opcode_cb_srl_r<r8::b>(),
+	/* cb[0x39] = */ opcode_cb_srl_r<r8::c>(),
+	/* cb[0x3A] = */ opcode_cb_srl_r<r8::d>(),
+	/* cb[0x3B] = */ opcode_cb_srl_r<r8::e>(),
+	/* cb[0x3C] = */ opcode_cb_srl_r<r8::h>(),
+	/* cb[0x3D] = */ opcode_cb_srl_r<r8::l>(),
+	/* cb[0x3E] = */ opcode_cb_srl_m<r16::hl>(),
+	/* cb[0x3F] = */ opcode_cb_srl_r<r8::a>(),
+	/* cb[0x40] = */ opcode_cb_bit_r<0, r8::b>(),
+	/* cb[0x41] = */ opcode_cb_bit_r<0, r8::c>(),
+	/* cb[0x42] = */ opcode_cb_bit_r<0, r8::d>(),
+	/* cb[0x43] = */ opcode_cb_bit_r<0, r8::e>(),
+	/* cb[0x44] = */ opcode_cb_bit_r<0, r8::h>(),
+	/* cb[0x45] = */ opcode_cb_bit_r<0, r8::l>(),
+	/* cb[0x46] = */ opcode_cb_bit_m<0, r16::hl>(),
+	/* cb[0x47] = */ opcode_cb_bit_r<0, r8::a>(),
+	/* cb[0x48] = */ opcode_cb_bit_r<1, r8::b>(),
+	/* cb[0x49] = */ opcode_cb_bit_r<1, r8::c>(),
+	/* cb[0x4A] = */ opcode_cb_bit_r<1, r8::d>(),
+	/* cb[0x4B] = */ opcode_cb_bit_r<1, r8::e>(),
+	/* cb[0x4C] = */ opcode_cb_bit_r<1, r8::h>(),
+	/* cb[0x4D] = */ opcode_cb_bit_r<1, r8::l>(),
+	/* cb[0x4E] = */ opcode_cb_bit_m<1, r16::hl>(),
+	/* cb[0x4F] = */ opcode_cb_bit_r<1, r8::a>(),
+	/* cb[0x50] = */ opcode_cb_bit_r<2, r8::b>(),
+	/* cb[0x51] = */ opcode_cb_bit_r<2, r8::c>(),
+	/* cb[0x52] = */ opcode_cb_bit_r<2, r8::d>(),
+	/* cb[0x53] = */ opcode_cb_bit_r<2, r8::e>(),
+	/* cb[0x54] = */ opcode_cb_bit_r<2, r8::h>(),
+	/* cb[0x55] = */ opcode_cb_bit_r<2, r8::l>(),
+	/* cb[0x56] = */ opcode_cb_bit_m<2, r16::hl>(),
+	/* cb[0x57] = */ opcode_cb_bit_r<2, r8::a>(),
+	/* cb[0x58] = */ opcode_cb_bit_r<3, r8::b>(),
+	/* cb[0x59] = */ opcode_cb_bit_r<3, r8::c>(),
+	/* cb[0x5A] = */ opcode_cb_bit_r<3, r8::d>(),
+	/* cb[0x5B] = */ opcode_cb_bit_r<3, r8::e>(),
+	/* cb[0x5C] = */ opcode_cb_bit_r<3, r8::h>(),
+	/* cb[0x5D] = */ opcode_cb_bit_r<3, r8::l>(),
+	/* cb[0x5E] = */ opcode_cb_bit_m<3, r16::hl>(),
+	/* cb[0x5F] = */ opcode_cb_bit_r<3, r8::a>(),
+	/* cb[0x60] = */ opcode_cb_bit_r<4, r8::b>(),
+	/* cb[0x61] = */ opcode_cb_bit_r<4, r8::c>(),
+	/* cb[0x62] = */ opcode_cb_bit_r<4, r8::d>(),
+	/* cb[0x63] = */ opcode_cb_bit_r<4, r8::e>(),
+	/* cb[0x64] = */ opcode_cb_bit_r<4, r8::h>(),
+	/* cb[0x65] = */ opcode_cb_bit_r<4, r8::l>(),
+	/* cb[0x66] = */ opcode_cb_bit_m<4, r16::hl>(),
+	/* cb[0x67] = */ opcode_cb_bit_r<4, r8::a>(),
+	/* cb[0x68] = */ opcode_cb_bit_r<5, r8::b>(),
+	/* cb[0x69] = */ opcode_cb_bit_r<5, r8::c>(),
+	/* cb[0x6A] = */ opcode_cb_bit_r<5, r8::d>(),
+	/* cb[0x6B] = */ opcode_cb_bit_r<5, r8::e>(),
+	/* cb[0x6C] = */ opcode_cb_bit_r<5, r8::h>(),
+	/* cb[0x6D] = */ opcode_cb_bit_r<5, r8::l>(),
+	/* cb[0x6E] = */ opcode_cb_bit_m<5, r16::hl>(),
+	/* cb[0x6F] = */ opcode_cb_bit_r<5, r8::a>(),
+	/* cb[0x70] = */ opcode_cb_bit_r<6, r8::b>(),
+	/* cb[0x71] = */ opcode_cb_bit_r<6, r8::c>(),
+	/* cb[0x72] = */ opcode_cb_bit_r<6, r8::d>(),
+	/* cb[0x73] = */ opcode_cb_bit_r<6, r8::e>(),
+	/* cb[0x74] = */ opcode_cb_bit_r<6, r8::h>(),
+	/* cb[0x75] = */ opcode_cb_bit_r<6, r8::l>(),
+	/* cb[0x76] = */ opcode_cb_bit_m<6, r16::hl>(),
+	/* cb[0x77] = */ opcode_cb_bit_r<6, r8::a>(),
+	/* cb[0x78] = */ opcode_cb_bit_r<7, r8::b>(),
+	/* cb[0x79] = */ opcode_cb_bit_r<7, r8::c>(),
+	/* cb[0x7A] = */ opcode_cb_bit_r<7, r8::d>(),
+	/* cb[0x7B] = */ opcode_cb_bit_r<7, r8::e>(),
+	/* cb[0x7C] = */ opcode_cb_bit_r<7, r8::h>(),
+	/* cb[0x7D] = */ opcode_cb_bit_r<7, r8::l>(),
+	/* cb[0x7E] = */ opcode_cb_bit_m<7, r16::hl>(),
+	/* cb[0x7F] = */ opcode_cb_bit_r<7, r8::a>(),
+	/* cb[0x80] = */ opcode_cb_resset_r<true, 0, r8::b>(),
+	/* cb[0x81] = */ opcode_cb_resset_r<true, 0, r8::c>(),
+	/* cb[0x82] = */ opcode_cb_resset_r<true, 0, r8::d>(),
+	/* cb[0x83] = */ opcode_cb_resset_r<true, 0, r8::e>(),
+	/* cb[0x84] = */ opcode_cb_resset_r<true, 0, r8::h>(),
+	/* cb[0x85] = */ opcode_cb_resset_r<true, 0, r8::l>(),
+	/* cb[0x86] = */ opcode_cb_resset_m<true, 0, r16::hl>(),
+	/* cb[0x87] = */ opcode_cb_resset_r<true, 0, r8::a>(),
+	/* cb[0x88] = */ opcode_cb_resset_r<true, 1, r8::b>(),
+	/* cb[0x89] = */ opcode_cb_resset_r<true, 1, r8::c>(),
+	/* cb[0x8A] = */ opcode_cb_resset_r<true, 1, r8::d>(),
+	/* cb[0x8B] = */ opcode_cb_resset_r<true, 1, r8::e>(),
+	/* cb[0x8C] = */ opcode_cb_resset_r<true, 1, r8::h>(),
+	/* cb[0x8D] = */ opcode_cb_resset_r<true, 1, r8::l>(),
+	/* cb[0x8E] = */ opcode_cb_resset_m<true, 1, r16::hl>(),
+	/* cb[0x8F] = */ opcode_cb_resset_r<true, 1, r8::a>(),
+	/* cb[0x90] = */ opcode_cb_resset_r<true, 2, r8::b>(),
+	/* cb[0x91] = */ opcode_cb_resset_r<true, 2, r8::c>(),
+	/* cb[0x92] = */ opcode_cb_resset_r<true, 2, r8::d>(),
+	/* cb[0x93] = */ opcode_cb_resset_r<true, 2, r8::e>(),
+	/* cb[0x94] = */ opcode_cb_resset_r<true, 2, r8::h>(),
+	/* cb[0x95] = */ opcode_cb_resset_r<true, 2, r8::l>(),
+	/* cb[0x96] = */ opcode_cb_resset_m<true, 2, r16::hl>(),
+	/* cb[0x97] = */ opcode_cb_resset_r<true, 2, r8::a>(),
+	/* cb[0x98] = */ opcode_cb_resset_r<true, 3, r8::b>(),
+	/* cb[0x99] = */ opcode_cb_resset_r<true, 3, r8::c>(),
+	/* cb[0x9A] = */ opcode_cb_resset_r<true, 3, r8::d>(),
+	/* cb[0x9B] = */ opcode_cb_resset_r<true, 3, r8::e>(),
+	/* cb[0x9C] = */ opcode_cb_resset_r<true, 3, r8::h>(),
+	/* cb[0x9D] = */ opcode_cb_resset_r<true, 3, r8::l>(),
+	/* cb[0x9E] = */ opcode_cb_resset_m<true, 3, r16::hl>(),
+	/* cb[0x9F] = */ opcode_cb_resset_r<true, 3, r8::a>(),
+	/* cb[0xA0] = */ opcode_cb_resset_r<true, 4, r8::b>(),
+	/* cb[0xA1] = */ opcode_cb_resset_r<true, 4, r8::c>(),
+	/* cb[0xA2] = */ opcode_cb_resset_r<true, 4, r8::d>(),
+	/* cb[0xA3] = */ opcode_cb_resset_r<true, 4, r8::e>(),
+	/* cb[0xA4] = */ opcode_cb_resset_r<true, 4, r8::h>(),
+	/* cb[0xA5] = */ opcode_cb_resset_r<true, 4, r8::l>(),
+	/* cb[0xA6] = */ opcode_cb_resset_m<true, 4, r16::hl>(),
+	/* cb[0xA7] = */ opcode_cb_resset_r<true, 4, r8::a>(),
+	/* cb[0xA8] = */ opcode_cb_resset_r<true, 5, r8::b>(),
+	/* cb[0xA9] = */ opcode_cb_resset_r<true, 5, r8::c>(),
+	/* cb[0xAA] = */ opcode_cb_resset_r<true, 5, r8::d>(),
+	/* cb[0xAB] = */ opcode_cb_resset_r<true, 5, r8::e>(),
+	/* cb[0xAC] = */ opcode_cb_resset_r<true, 5, r8::h>(),
+	/* cb[0xAD] = */ opcode_cb_resset_r<true, 5, r8::l>(),
+	/* cb[0xAE] = */ opcode_cb_resset_m<true, 5, r16::hl>(),
+	/* cb[0xAF] = */ opcode_cb_resset_r<true, 5, r8::a>(),
+	/* cb[0xB0] = */ opcode_cb_resset_r<true, 6, r8::b>(),
+	/* cb[0xB1] = */ opcode_cb_resset_r<true, 6, r8::c>(),
+	/* cb[0xB2] = */ opcode_cb_resset_r<true, 6, r8::d>(),
+	/* cb[0xB3] = */ opcode_cb_resset_r<true, 6, r8::e>(),
+	/* cb[0xB4] = */ opcode_cb_resset_r<true, 6, r8::h>(),
+	/* cb[0xB5] = */ opcode_cb_resset_r<true, 6, r8::l>(),
+	/* cb[0xB6] = */ opcode_cb_resset_m<true, 6, r16::hl>(),
+	/* cb[0xB7] = */ opcode_cb_resset_r<true, 6, r8::a>(),
+	/* cb[0xB8] = */ opcode_cb_resset_r<true, 7, r8::b>(),
+	/* cb[0xB9] = */ opcode_cb_resset_r<true, 7, r8::c>(),
+	/* cb[0xBA] = */ opcode_cb_resset_r<true, 7, r8::d>(),
+	/* cb[0xBB] = */ opcode_cb_resset_r<true, 7, r8::e>(),
+	/* cb[0xBC] = */ opcode_cb_resset_r<true, 7, r8::h>(),
+	/* cb[0xBD] = */ opcode_cb_resset_r<true, 7, r8::l>(),
+	/* cb[0xBE] = */ opcode_cb_resset_m<true, 7, r16::hl>(),
+	/* cb[0xBF] = */ opcode_cb_resset_r<true, 7, r8::a>(),
+	/* cb[0xC0] = */ opcode_cb_resset_r<false, 0, r8::b>(),
+	/* cb[0xC1] = */ opcode_cb_resset_r<false, 0, r8::c>(),
+	/* cb[0xC2] = */ opcode_cb_resset_r<false, 0, r8::d>(),
+	/* cb[0xC3] = */ opcode_cb_resset_r<false, 0, r8::e>(),
+	/* cb[0xC4] = */ opcode_cb_resset_r<false, 0, r8::h>(),
+	/* cb[0xC5] = */ opcode_cb_resset_r<false, 0, r8::l>(),
+	/* cb[0xC6] = */ opcode_cb_resset_m<false, 0, r16::hl>(),
+	/* cb[0xC7] = */ opcode_cb_resset_r<false, 0, r8::a>(),
+	/* cb[0xC8] = */ opcode_cb_resset_r<false, 1, r8::b>(),
+	/* cb[0xC9] = */ opcode_cb_resset_r<false, 1, r8::c>(),
+	/* cb[0xCA] = */ opcode_cb_resset_r<false, 1, r8::d>(),
+	/* cb[0xCB] = */ opcode_cb_resset_r<false, 1, r8::e>(),
+	/* cb[0xCC] = */ opcode_cb_resset_r<false, 1, r8::h>(),
+	/* cb[0xCD] = */ opcode_cb_resset_r<false, 1, r8::l>(),
+	/* cb[0xCE] = */ opcode_cb_resset_m<false, 1, r16::hl>(),
+	/* cb[0xCF] = */ opcode_cb_resset_r<false, 1, r8::a>(),
+	/* cb[0xD0] = */ opcode_cb_resset_r<false, 2, r8::b>(),
+	/* cb[0xD1] = */ opcode_cb_resset_r<false, 2, r8::c>(),
+	/* cb[0xD2] = */ opcode_cb_resset_r<false, 2, r8::d>(),
+	/* cb[0xD3] = */ opcode_cb_resset_r<false, 2, r8::e>(),
+	/* cb[0xD4] = */ opcode_cb_resset_r<false, 2, r8::h>(),
+	/* cb[0xD5] = */ opcode_cb_resset_r<false, 2, r8::l>(),
+	/* cb[0xD6] = */ opcode_cb_resset_m<false, 2, r16::hl>(),
+	/* cb[0xD7] = */ opcode_cb_resset_r<false, 2, r8::a>(),
+	/* cb[0xD8] = */ opcode_cb_resset_r<false, 3, r8::b>(),
+	/* cb[0xD9] = */ opcode_cb_resset_r<false, 3, r8::c>(),
+	/* cb[0xDA] = */ opcode_cb_resset_r<false, 3, r8::d>(),
+	/* cb[0xDB] = */ opcode_cb_resset_r<false, 3, r8::e>(),
+	/* cb[0xDC] = */ opcode_cb_resset_r<false, 3, r8::h>(),
+	/* cb[0xDD] = */ opcode_cb_resset_r<false, 3, r8::l>(),
+	/* cb[0xDE] = */ opcode_cb_resset_m<false, 3, r16::hl>(),
+	/* cb[0xDF] = */ opcode_cb_resset_r<false, 3, r8::a>(),
+	/* cb[0xE0] = */ opcode_cb_resset_r<false, 4, r8::b>(),
+	/* cb[0xE1] = */ opcode_cb_resset_r<false, 4, r8::c>(),
+	/* cb[0xE2] = */ opcode_cb_resset_r<false, 4, r8::d>(),
+	/* cb[0xE3] = */ opcode_cb_resset_r<false, 4, r8::e>(),
+	/* cb[0xE4] = */ opcode_cb_resset_r<false, 4, r8::h>(),
+	/* cb[0xE5] = */ opcode_cb_resset_r<false, 4, r8::l>(),
+	/* cb[0xE6] = */ opcode_cb_resset_m<false, 4, r16::hl>(),
+	/* cb[0xE7] = */ opcode_cb_resset_r<false, 4, r8::a>(),
+	/* cb[0xE8] = */ opcode_cb_resset_r<false, 5, r8::b>(),
+	/* cb[0xE9] = */ opcode_cb_resset_r<false, 5, r8::c>(),
+	/* cb[0xEA] = */ opcode_cb_resset_r<false, 5, r8::d>(),
+	/* cb[0xEB] = */ opcode_cb_resset_r<false, 5, r8::e>(),
+	/* cb[0xEC] = */ opcode_cb_resset_r<false, 5, r8::h>(),
+	/* cb[0xED] = */ opcode_cb_resset_r<false, 5, r8::l>(),
+	/* cb[0xEE] = */ opcode_cb_resset_m<false, 5, r16::hl>(),
+	/* cb[0xEF] = */ opcode_cb_resset_r<false, 5, r8::a>(),
+	/* cb[0xF0] = */ opcode_cb_resset_r<false, 6, r8::b>(),
+	/* cb[0xF1] = */ opcode_cb_resset_r<false, 6, r8::c>(),
+	/* cb[0xF2] = */ opcode_cb_resset_r<false, 6, r8::d>(),
+	/* cb[0xF3] = */ opcode_cb_resset_r<false, 6, r8::e>(),
+	/* cb[0xF4] = */ opcode_cb_resset_r<false, 6, r8::h>(),
+	/* cb[0xF5] = */ opcode_cb_resset_r<false, 6, r8::l>(),
+	/* cb[0xF6] = */ opcode_cb_resset_m<false, 6, r16::hl>(),
+	/* cb[0xF7] = */ opcode_cb_resset_r<false, 6, r8::a>(),
+	/* cb[0xF8] = */ opcode_cb_resset_r<false, 7, r8::b>(),
+	/* cb[0xF9] = */ opcode_cb_resset_r<false, 7, r8::c>(),
+	/* cb[0xFA] = */ opcode_cb_resset_r<false, 7, r8::d>(),
+	/* cb[0xFB] = */ opcode_cb_resset_r<false, 7, r8::e>(),
+	/* cb[0xFC] = */ opcode_cb_resset_r<false, 7, r8::h>(),
+	/* cb[0xFD] = */ opcode_cb_resset_r<false, 7, r8::l>(),
+	/* cb[0xFE] = */ opcode_cb_resset_m<false, 7, r16::hl>(),
+	/* cb[0xFF] = */ opcode_cb_resset_r<false, 7, r8::a>()
+}};

@@ -132,9 +132,9 @@ std::chrono::nanoseconds gb::z80_cpu::tick()
 	// fetch & decode
 	uint16_t pc = _registers.read16<register16::pc>();
 	uint8_t opcode = _memory.read8(pc++);
-	const auto &op = opcode == 0xCB ? cb_opcodes()[_memory.read8(pc++)] : opcodes()[opcode];
+	const auto &op = opcode == 0xCB ? cb_opcodes[_memory.read8(pc++)] : opcodes[opcode];
 
-	switch (op->extra_bytes())
+	switch (op.extra_bytes())
 	{
 	case 0:
 		break;
@@ -157,20 +157,20 @@ std::chrono::nanoseconds gb::z80_cpu::tick()
 
 	// execute
 #if 0
-	switch (op->extra_bytes())
+	switch (op.extra_bytes())
 	{
 	case 0:
-		debug(op->mnemonic());
+		debug(op.mnemonic());
 		break;
 	case 1:
-		debug(op->mnemonic(), "  $=", static_cast<int>(_value8));
+		debug(op.mnemonic(), "  $=", static_cast<int>(_value8));
 		break;
 	case 2:
-		debug(op->mnemonic(), "  $=", static_cast<int>(_value16));
+		debug(op.mnemonic(), "  $=", static_cast<int>(_value16));
 		break;
 	}
 #endif
-	op->execute(*this);
+	op.execute(*this);
 
 #if 0
 	// debug
@@ -178,7 +178,7 @@ std::chrono::nanoseconds gb::z80_cpu::tick()
 #endif
 
 	// "real" time spent
-	return (_double_speed ? clock_fast : clock) * op->cycles();
+	return (_double_speed ? clock_fast : clock) * op.cycles();
 }
 
 void gb::z80_cpu::post_interrupt(interrupt interrupt)
