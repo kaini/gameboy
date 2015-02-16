@@ -109,9 +109,10 @@ public:
 
 	z80_cpu(memory memory, register_file registers);
 
-	/** Simulation interface */
-	cputime fetch_decode();
-	cputime execute();
+	/** Simulation interface, always call them exactly in order! */
+	cputime fetch_decode_execute();  // first
+	cputime read();  // second
+	cputime write();  // third
 
 	/** Current CPU state. */
 	register_file &registers() { return _registers; }
@@ -122,13 +123,12 @@ public:
 	/** Current opcode (valid after fetch_decode was called) */
 	uint8_t value8() const { return _value8; }
 	uint16_t value16() const { return _value16; }
-	const opcode *next_opcode() const { return _opcode; }
-	void set_executed_extra_cycles() { _extra_cycles = true; }
+	void set_jumped() { _jumped = true; }
 
 	/** Sets or resets the Interrupt Master Enable flag. */
 	void set_ime(bool value) { _ime = value; }
 	void post_interrupt(interrupt interrupt);
-	void halt() { _halted = true; }
+	void halt() { _halted = true; _opcode = nullptr; }
 
 	/** Fast Mode. */
 	bool double_speed() const { return _double_speed; }
@@ -146,7 +146,7 @@ private:
 	uint8_t _value8;
 	uint16_t _value16;
 	const opcode *_opcode;
-	bool _extra_cycles;
+	bool _jumped;
 
 	bool _double_speed;
 	bool _speed_switch;

@@ -83,14 +83,14 @@ gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
 	_value8(0xFF),
 	_value16(0xFFFF),
 	_opcode(nullptr),
-	_extra_cycles(false),
+	_jumped(false),
 	_double_speed(false),
 	_speed_switch(false)
 {
 	_memory.add_mapping(this);
 }
 
-gb::cputime gb::z80_cpu::fetch_decode()
+gb::cputime gb::z80_cpu::fetch_decode_execute()
 {
 	ASSERT(_opcode == nullptr);
 
@@ -129,15 +129,16 @@ gb::cputime gb::z80_cpu::fetch_decode()
 
 	if (_halted)
 	{
-		return 3 * clock;
+		return 4 * clock;
 	}
 
-	// fetch & decode
+	// fetch
 	uint16_t pc = _registers.read16<register16::pc>();
 	uint8_t opcode = _memory.read8(pc++);
 	_opcode = &(opcode == 0xCB ? cb_opcodes[_memory.read8(pc++)] : opcodes[opcode]);
 
-	switch (_opcode->extra_bytes())
+	// decode
+	switch (_opcode->extra_bytes)
 	{
 	case 0:
 		break;
@@ -155,20 +156,10 @@ gb::cputime gb::z80_cpu::fetch_decode()
 		ASSERT_UNREACHABLE();
 	}
 
+	// increment PC
 	_registers.write16<register16::pc>(pc);
 
-	return (_opcode->cycles() - 1) * (_double_speed ? clock_fast : clock);
-}
-
-gb::cputime gb::z80_cpu::execute()
-{
-	if (_halted || _opcode == nullptr)
-	{
-		// _opcode is nullptr if we were _halted but between fetch_decode
-		// and execute an interrupt was posted
-		return 1 * clock;
-	}
-
+	// execute
 #if 0
 	switch (_opcode->extra_bytes())
 	{
@@ -184,23 +175,41 @@ gb::cputime gb::z80_cpu::execute()
 	}
 #endif
 
-	_opcode->execute(*this);
+	// CAREFUL: HALT will set _opcode to nullptr but never set _jumped
+	// this is the reason why I have to read the opcode time before
+	// executing the opcode.
+	cputime time = _opcode->cycles * (_double_speed ? clock_fast : clock);
+	_opcode->base_code(*this);
+	if (_jumped)
+	{
+		_jumped = false;
+		time += _opcode->jump_cycles * (_double_speed ? clock_fast : clock);
+	}
 
 #if 0
 	_registers.debug_print();
 #endif
 
-	cputime time;
-	if (_extra_cycles)
-	{
-		ASSERT(_opcode->extra_cycles() > 0);
-		_extra_cycles = false;
-		time = _opcode->extra_cycles() * (_double_speed ? clock_fast : clock);
-	}
-	time += 1 * (_double_speed ? clock_fast : clock);
+	return time;
+}
+
+gb::cputime gb::z80_cpu::read()
+{
+	// opcode can be nullptr if the CPU got un-halted by an interrupt
+	if (_halted || _opcode == nullptr)
+		return cputime(0);
+
+	return cputime(0);
+}
+
+gb::cputime gb::z80_cpu::write()
+{
+	// opcode can be nullptr if the CPU got un-halted by an interrupt
+	if (_halted || _opcode == nullptr)
+		return cputime(0);
 
 	_opcode = nullptr;
-	return time;
+	return cputime(0);
 }
 
 void gb::z80_cpu::post_interrupt(interrupt interrupt)

@@ -18,6 +18,7 @@ game_window::game_window(gb::rom rom, QWidget *parent) :
 	_thread.start(std::move(rom));
 	_refresh_timer->start();
 
+#if 0
 	QString str;
 	QString str2;
 	for (int i = 0; i < 0x100; ++i) {
@@ -31,6 +32,7 @@ game_window::game_window(gb::rom rom, QWidget *parent) :
 	debug(str.toStdString());
 	debug("");
 	debug(str2.toStdString());
+#endif
 }
 
 game_window::~game_window()

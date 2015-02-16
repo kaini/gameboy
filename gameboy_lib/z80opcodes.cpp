@@ -710,8 +710,7 @@ public:
 class opcode_nop : public gb::opcode
 {
 public:
-	opcode_nop() : gb::opcode("NOP", 0, 4, &execute) {}
-	static void execute(gb::z80_cpu &) {}
+	opcode_nop() : gb::opcode("NOP", 0, 4, nullptr) {}
 };
 
 template <bool Left, bool Carry, bool CorrectZ> uint8_t rd_impl(gb::z80_cpu &cpu, uint8_t value)
@@ -775,7 +774,7 @@ public:
 		if (check_condition(cpu, Cond))
 		{
 			cpu.registers().write16<r16::pc>(cpu.value16());
-			cpu.set_executed_extra_cycles();
+			cpu.set_jumped();
 		}
 	}
 };
@@ -803,7 +802,7 @@ public:
 		{
 			cpu.registers().write16<r16::pc>(
 				cpu.registers().read16<r16::pc>() + static_cast<int8_t>(cpu.value8()));
-			cpu.set_executed_extra_cycles();
+			cpu.set_jumped();
 		}
 	}
 };
@@ -824,7 +823,7 @@ public:
 			cpu.memory().write16(sp, pc);
 			cpu.registers().write16<r16::pc>(cpu.value16());
 			cpu.registers().write16<r16::sp>(sp);
-			cpu.set_executed_extra_cycles();
+			cpu.set_jumped();
 		}
 	}
 };
@@ -864,7 +863,7 @@ public:
 			sp += 2;
 			cpu.registers().write16<r16::sp>(sp);
 			cpu.registers().write16<r16::pc>(pc);
-			cpu.set_executed_extra_cycles();
+			cpu.set_jumped();
 		}
 	}
 };

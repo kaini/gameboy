@@ -7,37 +7,38 @@ namespace gb
 {
 class z80_cpu;
 
-class opcode
+struct opcode
 {
 	using code = void (*)(z80_cpu &cpu);
 
-public:
-	opcode(std::string mnemonic, int extra_bytes, int cycles, code code, int extra_cycles=0) :
-		_extra_bytes(extra_bytes),
-		_cycles(cycles),
-		_extra_cycles(extra_cycles),
-		_code(code),
-		_mnemonic(std::move(mnemonic))
+	opcode(std::string mnemonic, int extra_bytes, int cycles, code base_code, int jump_cycles=0,
+			code read_code=nullptr, code write_code=nullptr) :
+		extra_bytes(extra_bytes),
+		cycles(cycles),
+		jump_cycles(jump_cycles),
+		base_code(base_code == nullptr ? &noop : base_code),
+		read_code(read_code),
+		write_code(write_code),
+		mnemonic(std::move(mnemonic))
 	{
 		ASSERT(cycles >= 4);
 		ASSERT(cycles % 4 == 0);
-		ASSERT(extra_cycles >= 0);
-		ASSERT(extra_cycles % 4 == 0);
+		ASSERT(jump_cycles >= 0);
+		ASSERT(jump_cycles % 4 == 0);
 		ASSERT(0 <= extra_bytes && extra_bytes <= 2);
 	}
 
-	void execute(z80_cpu &cpu) const { _code(cpu); }
-	const std::string &mnemonic() const { return _mnemonic; }
-	int extra_bytes() const { return _extra_bytes; }
-	int cycles() const { return _cycles; }
-	int extra_cycles() const { return _extra_cycles; }
+	const int extra_bytes;
+	const int cycles;
+	const int jump_cycles;
+	const code base_code;  // base code, always executed, taxed `cycles` cycles
+	                       // if the PC changed `jump_cycles` cycles are taxed as well
+	const code read_code;  // read code, taxed 1 cycle if != nullptr
+	const code write_code;  // write code, taxed 1 cycle if != nullptr
+	const std::string mnemonic;
 
 private:
-	const int _extra_bytes;
-	const int _cycles;
-	const int _extra_cycles;  // cycles if the condition was true
-	const code _code;
-	const std::string _mnemonic;
+	static void noop(z80_cpu &) {}
 };
 
 using opcode_table = std::array<const opcode, 0x100>;

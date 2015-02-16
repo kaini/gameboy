@@ -36,7 +36,7 @@ BOOST_AUTO_TEST_CASE(test_timer_div)
 
 	// switch in double speed
 	cpu.memory().write8(gb::z80_cpu::key1, 1);
-	gb::opcodes[0x10 /* STOP */].execute(cpu);
+	cpu.stop();
 
 	timer.tick(cpu, cputime(255));
 	BOOST_CHECK_EQUAL(cpu.memory().read8(gb::timer::div), 0);

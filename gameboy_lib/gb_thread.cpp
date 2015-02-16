@@ -196,13 +196,16 @@ void gb::gb_thread::run(gb::rom rom)
 			}
 
 			// Simulation itself
-			const auto time_fd = cpu.fetch_decode();
-			timer.tick(cpu, time_fd);
+			const auto time_fde = cpu.fetch_decode_execute();
+			timer.tick(cpu, time_fde);
 
-			const auto time_ex = cpu.execute();
-			timer.tick(cpu, time_ex);
+			const auto time_r = cpu.read();
+			timer.tick(cpu, time_r);
 
-			const auto time = time_fd + time_ex;
+			const auto time_w = cpu.write();
+			timer.tick(cpu, time_w);
+
+			const auto time = time_fde + time_r + time_w;
 			video.tick(cpu, time);
 
 			// Time bookkeeping

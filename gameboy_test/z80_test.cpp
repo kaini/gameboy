@@ -59,8 +59,9 @@ static gb::z80_cpu run_cpu(test_memory *mapping, int instructions, gb::register_
 
 	while (instructions--)
 	{
-		cpu.fetch_decode();
-		cpu.execute();
+		cpu.fetch_decode_execute();
+		cpu.read();
+		cpu.write();
 	}
 
 	return cpu;
