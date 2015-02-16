@@ -83,6 +83,9 @@ void gb::gb_thread::run(gb::rom rom)
 	static_assert(std::ratio_less_equal<clock::period, std::ratio_multiply<std::ratio<100>, std::nano>>::value,
 		"clock too inaccurate (period > 100ns)");
 
+	if (ASSERT_ENABLED)
+		debug("WARNING: asserts are enabled!");
+
 	// Make Cartridge
 	std::unique_ptr<gb::memory_mapping> cartridge;
 	switch (rom.cartridge())

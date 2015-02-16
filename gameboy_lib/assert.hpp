@@ -5,7 +5,9 @@
 	#error ASSERT already defined
 #endif
 
-#if _DEBUG
+#if !defined(NDEBUG)
+
+	#define ASSERT_ENABLED true
 
 	#define ASSERT(expr) \
 		do { \
@@ -20,6 +22,8 @@
 		} while (0)
 
 #else
+
+	#define ASSERT_ENABLED false
 
 	#define ASSERT(expr) \
 		do { \

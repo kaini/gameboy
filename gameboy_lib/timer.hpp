@@ -20,6 +20,7 @@ public:
 	static const uint16_t tac = 0xFF07;
 
 	static const std::chrono::nanoseconds tick_ns;    // 16384 Hz
+	static const std::chrono::nanoseconds tick_fast_ns;  // 32768 Hz
 	static const std::chrono::nanoseconds tima_0_ns;  // 4096 Hz
 	static const std::chrono::nanoseconds tima_1_ns;  // 262144 Hz
 	static const std::chrono::nanoseconds tima_2_ns;  // 65536 Hz

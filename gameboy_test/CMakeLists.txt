@@ -1,5 +1,5 @@
 
-set (SOURCES z80_test.cpp main.cpp)
+set (SOURCES z80_test.cpp main.cpp timer.cpp)
 set (HEADERS)
 find_package(Boost 1.57.0 REQUIRED)
 include_directories (../gameboy_lib ${Boost_INCLUDE_DIRS})
