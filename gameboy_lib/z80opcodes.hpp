@@ -21,10 +21,8 @@ struct opcode
 		write_code(write_code),
 		mnemonic(std::move(mnemonic))
 	{
-		ASSERT(cycles >= 4);
-		ASSERT(cycles % 4 == 0);
+		ASSERT(cycles >= 0);
 		ASSERT(jump_cycles >= 0);
-		ASSERT(jump_cycles % 4 == 0);
 		ASSERT(0 <= extra_bytes && extra_bytes <= 2);
 	}
 

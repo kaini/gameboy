@@ -84,6 +84,7 @@ gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
 	_value16(0xFFFF),
 	_opcode(nullptr),
 	_jumped(false),
+	_temp(0),
 	_double_speed(false),
 	_speed_switch(false)
 {
@@ -196,20 +197,27 @@ gb::cputime gb::z80_cpu::fetch_decode_execute()
 gb::cputime gb::z80_cpu::read()
 {
 	// opcode can be nullptr if the CPU got un-halted by an interrupt
-	if (_halted || _opcode == nullptr)
+	if (_halted || _opcode == nullptr || _opcode->read_code == nullptr)
+	{
 		return cputime(0);
+	}
 
-	return cputime(0);
+	_opcode->read_code(*this);
+	return cputime(_double_speed ? clock_fast : clock);
 }
 
 gb::cputime gb::z80_cpu::write()
 {
 	// opcode can be nullptr if the CPU got un-halted by an interrupt
-	if (_halted || _opcode == nullptr)
+	if (_halted || _opcode == nullptr || _opcode->write_code == nullptr)
+	{
+		_opcode = nullptr;
 		return cputime(0);
+	}
 
+	_opcode->write_code(*this);
 	_opcode = nullptr;
-	return cputime(0);
+	return cputime(_double_speed ? clock_fast : clock);
 }
 
 void gb::z80_cpu::post_interrupt(interrupt interrupt)

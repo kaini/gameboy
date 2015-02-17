@@ -124,6 +124,8 @@ public:
 	uint8_t value8() const { return _value8; }
 	uint16_t value16() const { return _value16; }
 	void set_jumped() { _jumped = true; }
+	void set_temp(uint8_t v) { _temp = v; }
+	uint8_t temp() const { return _temp; }
 
 	/** Sets or resets the Interrupt Master Enable flag. */
 	void set_ime(bool value) { _ime = value; }
@@ -147,6 +149,7 @@ private:
 	uint16_t _value16;
 	const opcode *_opcode;
 	bool _jumped;
+	uint8_t _temp;
 
 	bool _double_speed;
 	bool _speed_switch;

@@ -194,7 +194,7 @@ template <gb::register16 Dst>
 class opcode_ld_mi : public gb::opcode
 {
 public:
-	opcode_ld_mi() : gb::opcode("LD (" + to_string(Dst) + "),$", 1, 12, &execute) {}
+	opcode_ld_mi() : gb::opcode("LD (" + to_string(Dst) + "),$", 1, 11, nullptr, 0, nullptr, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -218,7 +218,7 @@ template <gb::register8 Dst, gb::register16 Src>
 class opcode_ld_rm : public gb::opcode
 {
 public:
-	opcode_ld_rm() : gb::opcode("LD " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 8, &execute) {}
+	opcode_ld_rm() : gb::opcode("LD " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 7, nullptr, 0, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -230,7 +230,7 @@ template <gb::register8 Dst>
 class opcode_ld_rmi : public gb::opcode
 {
 public:
-	opcode_ld_rmi() : gb::opcode("LD " + to_string(Dst) + ",($)", 2, 16, &execute) {}
+	opcode_ld_rmi() : gb::opcode("LD " + to_string(Dst) + ",($)", 2, 15, nullptr, 0, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -242,7 +242,7 @@ template <gb::register8 Src>
 class opcode_ld_mir : public gb::opcode
 {
 public:
-	opcode_ld_mir() : gb::opcode("LD ($)," + to_string(Src), 2, 16, &execute)	{}
+	opcode_ld_mir() : gb::opcode("LD ($)," + to_string(Src), 2, 15, nullptr, 0, nullptr, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -254,7 +254,7 @@ template <gb::register16 Dst, gb::register8 Src>
 class opcode_ld_mr : public gb::opcode
 {
 public:
-	opcode_ld_mr() : gb::opcode("LD (" + to_string(Dst) + ")," + to_string(Src), 0, 8, &execute) {}
+	opcode_ld_mr() : gb::opcode("LD (" + to_string(Dst) + ")," + to_string(Src), 0, 7, nullptr, 0, nullptr, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -266,7 +266,7 @@ public:
 class opcode_ldff_ac : public gb::opcode
 {
 public:
-	opcode_ldff_ac() : gb::opcode("LD A,(ff00h+C)", 0, 8, &execute) {}
+	opcode_ldff_ac() : gb::opcode("LD A,(ff00h+C)", 0, 7, nullptr, 0, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -277,7 +277,7 @@ public:
 class opcode_ldff_ai : public gb::opcode
 {
 public:
-	opcode_ldff_ai() : gb::opcode("LD A,(ff00h+$)", 1, 12, &execute) {}
+	opcode_ldff_ai() : gb::opcode("LD A,(ff00h+$)", 1, 11, nullptr, 0, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -288,7 +288,7 @@ public:
 class opcode_ldff_ca : public gb::opcode
 {
 public:
-	opcode_ldff_ca() : gb::opcode("LD (ff00h+C),A", 0, 8, &execute) {}
+	opcode_ldff_ca() : gb::opcode("LD (ff00h+C),A", 0, 7, nullptr, 0, nullptr, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -299,7 +299,7 @@ public:
 class opcode_ldff_ia : public gb::opcode
 {
 public:
-	opcode_ldff_ia() : gb::opcode("LD (ff00h+$),A", 1, 12, &execute) {}
+	opcode_ldff_ia() : gb::opcode("LD (ff00h+$),A", 1, 11, nullptr, 0, nullptr, &execute) {}
 
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -312,7 +312,7 @@ class opcode_lddi : public gb::opcode
 {
 public:
 	opcode_lddi() :
-		gb::opcode(std::string(Dec ? "LDD" : "LDI") + " " + (AHL ? "A,(HL)" : "(HL),A"), 0, 8, &execute)
+		gb::opcode(std::string(Dec ? "LDD" : "LDI") + " " + (AHL ? "A,(HL)" : "(HL),A"), 0, 7, nullptr, 0, AHL ? &execute : nullptr, AHL ? nullptr : &execute)
 	{}
 
 	static void execute(gb::z80_cpu &cpu)
@@ -439,7 +439,7 @@ template <operation Op, gb::register8 Dst, gb::register16 Src>
 class opcode_alu_rm : public gb::opcode
 {
 public:
-	opcode_alu_rm() : gb::opcode(to_string(Op) + " " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 8, &execute) {}
+	opcode_alu_rm() : gb::opcode(to_string(Op) + " " + to_string(Dst) + ",(" + to_string(Src) + ")", 0, 7, nullptr, 0, &execute) {}
 		
 	static void execute(gb::z80_cpu &cpu)
 	{
@@ -498,11 +498,16 @@ template <bool Dec, gb::register16 Dst>
 class opcode_decinc_rm : public gb::opcode
 {
 public:
-	opcode_decinc_rm() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " (" + to_string(Dst) + ")", 0, 12, &execute) {}
+	opcode_decinc_rm() : gb::opcode(std::string(Dec ? "DEC" : "INC") + " (" + to_string(Dst) + ")", 0, 10, nullptr, 0, &execute_read, &execute_write) {}
 
-	static void execute(gb::z80_cpu &cpu)
+	static void execute_read(gb::z80_cpu &cpu)
 	{
-		uint8_t value = cpu.memory().read8(cpu.registers().read16<Dst>());
+		cpu.set_temp(cpu.memory().read8(cpu.registers().read16<Dst>()));
+	}
+
+	static void execute_write(gb::z80_cpu &cpu)
+	{
+		uint8_t value = cpu.temp();
 		if (Dec)
 		{
 			cpu.registers().set<flag::n>(true);
@@ -900,13 +905,19 @@ class opcode_cb_rdc_m : public gb::opcode
 {
 public:
 	opcode_cb_rdc_m() :
-		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " (" + to_string(Dst) + ")", 0, 16, &execute)
+		gb::opcode(std::string("R") + (Left ? "L" : "R") + (Carry ? "C" : "") + " (" + to_string(Dst) + ")", 0, 14, nullptr, 0, &execute_read, &execute_write)
 	{}
 	
-	static void execute(gb::z80_cpu &cpu)
+	static void execute_read(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, rd_impl<Left, Carry, true>(cpu, cpu.memory().read8(addr)));
+		cpu.set_temp(cpu.memory().read8(addr));
+	}
+
+	static void execute_write(gb::z80_cpu &cpu)
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, rd_impl<Left, Carry, true>(cpu, cpu.temp()));
 	}
 };
 
@@ -953,13 +964,19 @@ class opcode_cb_sda_m : public gb::opcode
 {
 public:
 	opcode_cb_sda_m() :
-		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A (" + to_string(Dst) + ")", 0, 16, &execute)
+		gb::opcode(std::string("S") + (Left ? "L" : "R") + "A (" + to_string(Dst) + ")", 0, 14, nullptr, 0, &execute_read, &execute_write)
 	{}
-	
-	static void execute(gb::z80_cpu &cpu)
+
+	static void execute_read(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, sda_impl<Left>(cpu, cpu.memory().read8(addr)));
+		cpu.set_temp(cpu.memory().read8(addr));
+	}
+	
+	static void execute_write(gb::z80_cpu &cpu)
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, sda_impl<Left>(cpu, cpu.temp()));
 	}
 };
 
@@ -994,13 +1011,19 @@ class opcode_cb_swap_m : public gb::opcode
 {
 public:
 	opcode_cb_swap_m() :
-		gb::opcode("SWAP (" + to_string(Dst) + ")", 0, 16, &execute)
+		gb::opcode("SWAP (" + to_string(Dst) + ")", 0, 14, nullptr, 0, &execute_read, &execute_write)
 	{}
 	
-	static void execute(gb::z80_cpu &cpu)
+	static void execute_read(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, swap_impl(cpu, cpu.memory().read8(addr)));
+		cpu.set_temp(cpu.memory().read8(addr));
+	}
+
+	static void execute_write(gb::z80_cpu &cpu)
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, swap_impl(cpu, cpu.temp()));
 	}
 };
 
@@ -1034,13 +1057,19 @@ class opcode_cb_srl_m : public gb::opcode
 {
 public:
 	opcode_cb_srl_m() :
-		gb::opcode("SRL (" + to_string(Dst) + ")", 0, 16, &execute)
+		gb::opcode("SRL (" + to_string(Dst) + ")", 0, 14, nullptr, 0, &execute_read, &execute_write)
 	{}
 	
-	static void execute(gb::z80_cpu &cpu)
+	static void execute_read(gb::z80_cpu &cpu)
 	{
 		uint16_t addr = cpu.registers().read16<Dst>();
-		cpu.memory().write8(addr, srl_impl(cpu, cpu.memory().read8(addr)));
+		cpu.set_temp(cpu.memory().read8(addr));
+	}
+
+	static void execute_write(gb::z80_cpu &cpu)
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.memory().write8(addr, srl_impl(cpu, cpu.temp()));
 	}
 };
 
@@ -1065,7 +1094,7 @@ class opcode_cb_bit_m : public gb::opcode
 {
 public:
 	opcode_cb_bit_m() :
-		gb::opcode("BIT " + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 12, &execute)
+		gb::opcode("BIT " + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 11, nullptr, 0, &execute)
 	{}
 	
 	static void execute(gb::z80_cpu &cpu)
@@ -1100,17 +1129,23 @@ class opcode_cb_resset_m : public gb::opcode
 {
 public:
 	opcode_cb_resset_m() :
-		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 16, &execute)
+		gb::opcode((res ? "RES " : "SET ") + std::to_string(bit) + ",(" + to_string(Dst) + ")", 0, 14, nullptr, 0, &execute_read, &execute_write)
 	{}
+
+	static void execute_read(gb::z80_cpu &cpu)
+	{
+		uint16_t addr = cpu.registers().read16<Dst>();
+		cpu.set_temp(cpu.memory().read8(addr));
+	}
 	
-	static void execute(gb::z80_cpu &cpu)
+	static void execute_write(gb::z80_cpu &cpu)
 	{
 		uint8_t b = 1 << bit;
 		uint16_t addr = cpu.registers().read16<Dst>();
 		if (res)
-			cpu.memory().write8(addr, cpu.memory().read8(addr) & ~b);
+			cpu.memory().write8(addr, cpu.temp() & ~b);
 		else  // set
-			cpu.memory().write8(addr, cpu.memory().read8(addr) | b);
+			cpu.memory().write8(addr, cpu.temp() | b);
 	}
 };
 
