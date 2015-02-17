@@ -17,8 +17,16 @@ public:
 	bool write8(uint16_t addr, uint8_t value) override;
 
 private:
-	bool _button_keys;
-	bool _direction_keys;
+	// Bit 7  -
+	//     6  -
+	//     5  Button Keys Select (0 = select)
+	//     4  Direction Keys Select (0 = select)
+	//     3  Down/Start
+	//     2  Up/Select
+	//     1  Left/B
+	//     0  Right/A
+	// IMPORTANT: 1 = released and 0 = pressed
+	uint8_t _register;
 };
 
 }

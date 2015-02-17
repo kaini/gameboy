@@ -103,10 +103,6 @@ gb::cputime gb::z80_cpu::fetch_decode_execute()
 		const uint8_t ie = _memory.read8(internal_ram::ie);
 		if (if_ & ie)
 		{
-#if 0
-			debug("Interrupt!");
-#endif
-
 			uint16_t pc = _registers.read16<register16::pc>();
 			uint16_t sp = _registers.read16<register16::sp>();
 			sp -= 2;
@@ -161,22 +157,6 @@ gb::cputime gb::z80_cpu::fetch_decode_execute()
 	// increment PC
 	_registers.write16<register16::pc>(pc);
 
-	// execute
-#if 0
-	switch (_opcode->extra_bytes())
-	{
-	case 0:
-		debug(_opcode->mnemonic());
-		break;
-	case 1:
-		debug(_opcode->mnemonic(), "  $=", static_cast<int>(_value8));
-		break;
-	case 2:
-		debug(_opcode->mnemonic(), "  $=", static_cast<int>(_value16));
-		break;
-	}
-#endif
-
 	// CAREFUL: HALT will set _opcode to nullptr but never set _jumped
 	// this is the reason why I have to read the opcode time before
 	// executing the opcode.
@@ -187,10 +167,6 @@ gb::cputime gb::z80_cpu::fetch_decode_execute()
 		_jumped = false;
 		time += _opcode->jump_cycles * (_double_speed ? clock_fast : clock);
 	}
-
-#if 0
-	_registers.debug_print();
-#endif
 
 	return time;
 }
@@ -217,6 +193,7 @@ gb::cputime gb::z80_cpu::write()
 	}
 
 	_opcode->write_code(*this);
+
 	_opcode = nullptr;
 	return cputime(_double_speed ? clock_fast : clock);
 }

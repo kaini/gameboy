@@ -35,12 +35,28 @@ bool gb::video::read8(uint16_t addr, uint8_t &value) const
 {
 	if (0x8000 <= addr && addr < 0xA000)
 	{
-		value = _vram[_vram_bank][addr - 0x8000];
+		if ((access_register(r::stat) & stat_flag::mode) == 3)
+		{
+			debug("WARNING: read in VRAM during mode 3");
+			value = 0xff;
+		}
+		else
+		{
+			value = _vram[_vram_bank][addr - 0x8000];
+		}
 		return true;
 	}
 	else if (0xFE00 <= addr && addr < 0xFEA0)
 	{
-		value = _sprite_attribs[addr - 0xFE00];
+		if ((access_register(r::stat) & stat_flag::mode) >= 2)
+		{
+			debug("WARNING: read in OAM during mode 2 or 3");
+			value = 0xff;
+		}
+		else
+		{
+			value = _sprite_attribs[addr - 0xFE00];
+		}
 		return true;
 	}
 	else if (is_register(addr))
@@ -48,10 +64,25 @@ bool gb::video::read8(uint16_t addr, uint8_t &value) const
 		switch (addr)
 		{
 		case r::bgpd:
-			value = _bgp[access_register(r::bgpi) & 0x3F];
+			if ((access_register(r::stat) & stat_flag::mode) == 3)
+			{
+				debug("WARNING: read from BGP in mode 3");
+				value = 0xff;
+			}
+			else
+			{
+				value = _bgp[access_register(r::bgpi) & 0x3F];
+			}
 			break;
 		case r::obpd:
-			value = _obp[access_register(r::obpi) & 0x3F];
+			if ((access_register(r::stat) & stat_flag::mode) == 3)
+			{
+				debug("WARNING: read from OBP in mode 3");
+			}
+			else
+			{
+				value = _obp[access_register(r::obpi) & 0x3F];
+			}
 			break;
 		default:
 			value = access_register(addr);
@@ -74,7 +105,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 		{
 			debug("WARNING: write in VRAM during mode 3");
 		}
-		// TODO else
+		else
 		{
 			_vram[_vram_bank][addr - 0x8000] = value;
 		}
@@ -86,7 +117,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 		{
 			debug("WARNING: write in OAM during mode 2 or 3");
 		}
-		// TODO else
+		else
 		{
 			_sprite_attribs[addr - 0xFE00] = value;
 		}
@@ -105,7 +136,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 			{
 				debug("WARNING: write to BGP in mode 3");
 			}
-			// TODO else
+			else
 			{
 				uint8_t r = access_register(r::bgpi);
 				_bgp[r & 0x3F] = value;
@@ -119,7 +150,7 @@ bool gb::video::write8(uint16_t addr, uint8_t value)
 			{
 				debug("WARNING: write to OBP in mode 3");
 			}
-			// TODO else
+			else
 			{
 				uint8_t r = access_register(r::obpi);
 				_obp[r & 0x3F] = value;
@@ -333,44 +364,63 @@ void gb::video::tick(gb::z80_cpu &cpu, cputime time)
 void gb::video::draw_line(const int y)
 {
 	// debug("DRAWING line ", y);
-
 	const int scy = access_register(r::scy);
 	const int scx = access_register(r::scx);
-	const bool bg_enabled = access_register(r::lcdc) & lcdc_flag::bg_display;
+	const auto lcdc = access_register(r::lcdc);
+
+	// TODO LCDC bit 0
+	const bool bg_normal_priority = bit::test(lcdc, lcdc_flag::bg_display);
+	if (!bg_normal_priority) debug("NIP: LCDC bit 0 is 0");
+
 	const uint8_t *bg_tile_map;
 	const uint8_t *bg_tile_map_attrs;
-	if ((access_register(r::lcdc) & lcdc_flag::bg_tile_map_select) == 0)
-	{
-		bg_tile_map = &_vram[0][0x9800 - 0x8000];
-		bg_tile_map_attrs = &_vram[1][0x9800 - 0x8000];
-	}
-	else
+	if (bit::test(lcdc, lcdc_flag::bg_tile_map_select))
 	{
 		bg_tile_map = &_vram[0][0x9C00 - 0x8000];
 		bg_tile_map_attrs = &_vram[1][0x9C00 - 0x8000];
 	}
+	else
+	{
+		bg_tile_map = &_vram[0][0x9800 - 0x8000];
+		bg_tile_map_attrs = &_vram[1][0x9800 - 0x8000];
+	}
 
 	for (int x = 0; x < width; ++x)
 	{
+		// Reset
 		image(x, y) = {255, 255, 255};
 
-		if (bg_enabled)
+		// Background
 		{
-			const size_t map_index = (((y + scy) / 8) % 32) * 32 + ((x + scx) / 8) % 32;
-			const auto tile_idx = bg_tile_map[map_index];
+			const auto map_index = (((y + scy) / 8) % 32) * 32 + ((x + scx) / 8) % 32;
+			//                        ^^^^^^^ screen y + scroll offset
+			//                                   ^ position in px -> slot number (256 -> 32)
+			//                                        ^^ wrap around
+			//                                              ^^ actual memory location (row/x major layout)
+
 			const auto tile_attrs = bg_tile_map_attrs[map_index];
 			const auto bgp_idx = tile_attrs & 0x07;
-			const auto tile_vram_bank = (tile_attrs & 0x08) == 0 ? 0 : 1;
+			const auto tile_vram_bank = bit::test(tile_attrs, 1 << 3) ? 1 : 0;
+			const auto hflip = bit::test(tile_attrs, 1 << 5);
+			const auto vflip = bit::test(tile_attrs, 1 << 6);
+			const auto priority = bit::test(tile_attrs, 1 << 7);
+
+			const auto tile_idx = bg_tile_map[map_index];
+			const auto tile_data = get_bg_tile(tile_vram_bank, tile_idx);
+
+			if (hflip) debug("NIP: hflip at ", x, " ", y);
+			if (vflip) debug("NIP: vflip at ", x, " ", y);
+			//if (priority) debug("NIP: bg over oam priority ", x, " ", y);
 			// TODO hflip
 			// TODO vflip
 			// TODO priority
-			const uint8_t *tile = get_bg_tile(tile_vram_bank, tile_idx);
+
 			const size_t tile_line_index = ((y + scy) % 8) * 2;
 			const size_t tile_x_bit = 7 - (x + scx) % 8;
 			size_t color_idx = 0;
-			if ((tile[tile_line_index] & (1 << tile_x_bit)) != 0)
+			if ((tile_data[tile_line_index] & (1 << tile_x_bit)) != 0)
 				color_idx |= 1;
-			if ((tile[tile_line_index + 1] & (1 << tile_x_bit)) != 0)
+			if ((tile_data[tile_line_index + 1] & (1 << tile_x_bit)) != 0)
 				color_idx |= 2;
 			image(x, y) = get_bg_color(bgp_idx, color_idx);
 		}
@@ -396,13 +446,13 @@ void gb::video::set_ly(z80_cpu &cpu, uint8_t value)
 
 const uint8_t *gb::video::get_bg_tile(uint8_t bank, uint8_t idx) const
 {
-	if ((access_register(r::lcdc) & lcdc_flag::bg_window_data_select) == 0)
+	if (bit::test(access_register(r::lcdc), lcdc_flag::bg_window_data_select))
 	{
-		return &_vram[bank][0x1000 + static_cast<int>(static_cast<int8_t>(idx)) * 16];
+		return &_vram[bank][idx * 16];
 	}
 	else
 	{
-		return &_vram[bank][static_cast<size_t>(idx) * 16];
+		return &_vram[bank][0x1000 + static_cast<int8_t>(idx) * 16];
 	}
 }
 

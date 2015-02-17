@@ -136,6 +136,7 @@ public:
 	void set_jumped() { _jumped = true; }
 	void set_temp(uint8_t v) { _temp = v; }
 	uint8_t temp() const { return _temp; }
+	const opcode *current_opcode() const { return _opcode; }
 
 	/** Sets or resets the Interrupt Master Enable flag. */
 	void set_ime(bool value) { _ime = value; }

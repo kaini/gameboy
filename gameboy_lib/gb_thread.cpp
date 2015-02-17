@@ -106,9 +106,26 @@ gb::gb_hardware::gb_hardware(rom arg_rom) :
 {
 }
 
+#define HEAVY_DEBUG 0
 gb::cputime gb::gb_hardware::tick()
 {
 	const auto time_fde = cpu->fetch_decode_execute();
+#if HEAVY_DEBUG
+	switch (cpu->current_opcode()->extra_bytes)
+	{
+	case 0:
+		debug(cpu->current_opcode()->mnemonic);
+		break;
+	case 1:
+		debug(cpu->current_opcode()->mnemonic, "  $=", static_cast<int>(cpu->value8()));
+		break;
+	case 2:
+		debug(cpu->current_opcode()->mnemonic, "  $=", static_cast<int>(cpu->value16()));
+		break;
+	default:
+		ASSERT_UNREACHABLE();
+	}
+#endif
 	timer.tick(*cpu, time_fde);
 
 	const auto time_r = cpu->read();
@@ -119,6 +136,10 @@ gb::cputime gb::gb_hardware::tick()
 
 	const auto time = time_fde + time_r + time_w;
 	video.tick(*cpu, time);
+
+#if HEAVY_DEBUG
+	cpu->registers().debug_print();
+#endif
 
 	return time;
 }
@@ -186,6 +207,7 @@ void gb::gb_thread::run()
 
 	if (ASSERT_ENABLED)
 		debug("WARNING: asserts are enabled!");
+	debug("=====================================================");
 
 	// Let's go :)
 	std::vector<command> current_commands;
@@ -259,7 +281,7 @@ void gb::gb_thread::run()
 					static_cast<double>(duration_cast<nanoseconds>(performance_gb_time).count()) /
 					static_cast<double>(duration_cast<nanoseconds>(performance_real_time - performance_sleep_time).count()) *
 					100.0;
-				debug("PERF: simulation drift in the last 10 s was ~", accuracy, " ms");
+				debug("PERF: simulation drift in the last 10 s was ", accuracy, " ms");
 				debug("PERF: simulation speed in the last 10 s was ", speed, " % of required speed");
 				if (speed < 110.0)
 				{
