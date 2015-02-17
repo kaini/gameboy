@@ -26,11 +26,15 @@ std::unique_ptr<gb::memory_mapping> init_cartridge(gb::rom rom)
 {
 	switch (rom.cartridge())
 	{
-	case 0x00:
+	case 0x00:  // ROM only (could have little RAM)
 		return std::make_unique<gb::cart_rom_only>(std::move(rom));
-	case 0x01:
+	case 0x01:  // MBC1
+	case 0x02:  // MBC1+RAM
+	case 0x03:  // MBC1+RAM+BATTERY
 		return std::make_unique<gb::cart_mbc1>(std::move(rom));
-	case 0x19:
+	case 0x19:  // MBC5
+	case 0x1A:  // MBC5+RAM
+	case 0x1B:  // MBC5+RAM+BATTERY
 		return std::make_unique<gb::cart_mbc5>(std::move(rom));
 	default:
 		throw gb::unsupported_rom_exception("Unknown cartridge type");
