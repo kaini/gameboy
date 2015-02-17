@@ -1,6 +1,7 @@
 #include "game_window.hpp"
 #include <QPainter>
 #include <QTimer>
+#include <QMessageBox>
 #include <z80opcodes.hpp>
 #include <debug.hpp>
 
@@ -15,24 +16,8 @@ game_window::game_window(gb::rom rom, QWidget *parent) :
 	_refresh_timer->setSingleShot(false);
 	connect(_refresh_timer, SIGNAL(timeout()), this, SLOT(update()));
 
-	_thread.start(std::move(rom));
 	_refresh_timer->start();
-
-#if 0
-	QString str;
-	QString str2;
-	for (int i = 0; i < 0x100; ++i) {
-		if (i % 0x10 == 0 && i != 0) {
-			str.append("\n");
-			str2.append("\n");
-		}
-		str.append(QString("%1,").arg(gb::opcodes[i].cycles() / 4));
-		str2.append(QString("%1,").arg((gb::opcodes[i].cycles() + gb::opcodes[i].extra_cycles()) / 4));
-	}
-	debug(str.toStdString());
-	debug("");
-	debug(str2.toStdString());
-#endif
+	_thread.start(std::move(rom));
 }
 
 game_window::~game_window()

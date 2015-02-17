@@ -52,13 +52,21 @@ void main_window::play()
 	}
 	else
 	{
-		_ui.loadRomPushButton->setEnabled(false);
-		_ui.playPushButton->setEnabled(false);
+		try
+		{
+			_game_window = new game_window(*_rom);
+			_game_window->setAttribute(Qt::WA_DeleteOnClose);
+			connect(_game_window, SIGNAL(destroyed()), this, SLOT(set_game_window_null()));
+			_game_window->show();
 
-		_game_window = new game_window(*_rom);
-		_game_window->setAttribute(Qt::WA_DeleteOnClose);
-		connect(_game_window, SIGNAL(destroyed()), this, SLOT(set_game_window_null()));
-		_game_window->show();
+			_ui.loadRomPushButton->setEnabled(false);
+			_ui.playPushButton->setEnabled(false);
+		}
+		catch (const gb::unsupported_rom_exception &ex)
+		{
+			QMessageBox::critical(this, tr("Unsupported ROM"),
+				tr("The ROM file can't be emulated, please report this bug.\n\n") + ex.what());
+		}
 	}
 }
 
@@ -105,6 +113,7 @@ void main_window::update_rom_info()
 	if (_rom == nullptr)
 	{
 		_ui.playPushButton->setEnabled(false);
+		_ui.fileNameLineEdit->setText("");
 		_ui.titleLineEdit->setText("");
 		_ui.manufacturerLineEdit->setText("");
 		_ui.licenseLineEdit->setText("");
@@ -122,6 +131,7 @@ void main_window::update_rom_info()
 	else
 	{
 		_ui.playPushButton->setEnabled(true);  // TODO actually check this!
+		_ui.fileNameLineEdit->setText(_settings.value("open_rom_path").toString());
 		_ui.titleLineEdit->setText(QString::fromStdString(_rom->title()));
 		_ui.manufacturerLineEdit->setText(QString::fromStdString(_rom->manufacturer()));
 		_ui.licenseLineEdit->setText(QString::fromStdString(_rom->license()));

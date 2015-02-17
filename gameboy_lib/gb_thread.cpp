@@ -21,102 +21,32 @@
 namespace
 {
 class stop_exception {};
-}
 
-gb::gb_thread::gb_thread() :
-	_running(false)
+std::unique_ptr<gb::memory_mapping> init_cartridge(gb::rom rom)
 {
-}
-
-gb::gb_thread::~gb_thread()
-{
-	post_stop();
-	join();
-}
-
-void gb::gb_thread::start(gb::rom rom)
-{
-	ASSERT(!_running);
-	_running = true;
-	_thread = std::thread(&gb_thread::run, this, std::move(rom));
-}
-
-void gb::gb_thread::join()
-{
-	if (_running)
-	{
-		_thread.join();
-	}
-}
-
-void gb::gb_thread::post_stop()
-{
-	command fn([] (video &){ 
-		throw stop_exception();
-	});
-
-	std::lock_guard<std::mutex> lock(_mutex);
-	_command_queue.emplace_back(std::move(fn));
-}
-
-std::future<gb::video::raw_image> gb::gb_thread::post_get_image()
-{
-	// TODO use capture by move (Visual Studio 2015/C++14)
-	auto promise = std::make_shared<std::promise<video::raw_image>>();
-	auto future = promise->get_future();
-	command fn([promise] (video &video) {
-		promise->set_value(video.image());
-	});
-
-	std::lock_guard<std::mutex> lock(_mutex);
-	_command_queue.emplace_back(std::move(fn));
-	return future;
-}
-
-void gb::gb_thread::run(gb::rom rom)
-{
-	using namespace std::chrono;
-
-	using clock = steady_clock;
-	static_assert(clock::is_monotonic, "clock not monotonic");
-	static_assert(clock::is_steady, "clock not steady");
-	static_assert(std::ratio_less_equal<clock::period, std::ratio_multiply<std::ratio<100>, std::nano>>::value,
-		"clock too inaccurate (period > 100ns)");
-
-	if (ASSERT_ENABLED)
-		debug("WARNING: asserts are enabled!");
-
-	// Make Cartridge
-	std::unique_ptr<gb::memory_mapping> cartridge;
 	switch (rom.cartridge())
 	{
 	case 0x00:
-		cartridge = std::make_unique<gb::cart_rom_only>(std::move(rom));
-		break;
+		return std::make_unique<gb::cart_rom_only>(std::move(rom));
 	case 0x01:
-		cartridge = std::make_unique<gb::cart_mbc1>(std::move(rom));
-		break;
+		return std::make_unique<gb::cart_mbc1>(std::move(rom));
 	case 0x19:
-		cartridge = std::make_unique<gb::cart_mbc5>(std::move(rom));
-		break;
+		return std::make_unique<gb::cart_mbc5>(std::move(rom));
 	default:
-		return;
+		throw gb::unsupported_rom_exception("Unknown cartridge type");
 	}
+}
 
-	// Misc. Hardware
-	gb::internal_ram internal_ram;
-	gb::video video;
-	gb::timer timer;
-	gb::joypad joypad;
-	gb::sound sound;
-
+std::unique_ptr<gb::z80_cpu> init_cpu(gb::memory_mapping &cart, gb::internal_ram &internal_ram,
+		gb::video &video, gb::timer &timer, gb::joypad &joypad, gb::sound &sound)
+{
 	// Make Memory
 	gb::memory memory;
-	memory.add_mapping(cartridge.get());
+	memory.add_mapping(&cart);
 	memory.add_mapping(&internal_ram);
 	memory.add_mapping(&video);
-	memory.add_mapping(&joypad);
 	memory.add_mapping(&timer);
+	memory.add_mapping(&joypad);
 	memory.add_mapping(&sound);
 	memory.write8(0xff05, 0x00);
 	memory.write8(0xff06, 0x00);
@@ -152,16 +82,106 @@ void gb::gb_thread::run(gb::rom rom)
 
 	// Register file
 	gb::register_file registers;
-	registers.write8<register8::a>(0x11);
-	registers.write8<register8::f>(0xb0);
-	registers.write16<register16::bc>(0x0013);
-	registers.write16<register16::de>(0x00d8);
-	registers.write16<register16::hl>(0x014d);
-	registers.write16<register16::sp>(0xfffe);
-	registers.write16<register16::pc>(0x0100);
+	registers.write8<gb::register8::a>(0x11);
+	registers.write8<gb::register8::f>(0xb0);
+	registers.write16<gb::register16::bc>(0x0013);
+	registers.write16<gb::register16::de>(0x00d8);
+	registers.write16<gb::register16::hl>(0x014d);
+	registers.write16<gb::register16::sp>(0xfffe);
+	registers.write16<gb::register16::pc>(0x0100);
 
 	// Make Cpu
-	gb::z80_cpu cpu(std::move(memory), std::move(registers));
+	return std::make_unique<gb::z80_cpu>(std::move(memory), std::move(registers));
+}
+
+}
+
+gb::gb_hardware::gb_hardware(rom arg_rom) :
+	cartridge(init_cartridge(std::move(arg_rom))),
+	cpu(init_cpu(*cartridge, internal_ram, video, timer, joypad, sound))
+{
+}
+
+gb::cputime gb::gb_hardware::tick()
+{
+	const auto time_fde = cpu->fetch_decode_execute();
+	timer.tick(*cpu, time_fde);
+
+	const auto time_r = cpu->read();
+	timer.tick(*cpu, time_r);
+
+	const auto time_w = cpu->write();
+	timer.tick(*cpu, time_w);
+
+	const auto time = time_fde + time_r + time_w;
+	video.tick(*cpu, time);
+
+	return time;
+}
+
+gb::gb_thread::gb_thread() :
+	_running(false)
+{
+}
+
+gb::gb_thread::~gb_thread()
+{
+	post_stop();
+	join();
+}
+
+void gb::gb_thread::start(gb::rom rom)
+{
+	ASSERT(!_running);
+	_gb = std::make_unique<gb_hardware>(std::move(rom));
+	_thread = std::thread(&gb_thread::run, this);
+	_running = true;
+}
+
+void gb::gb_thread::join()
+{
+	if (_running)
+	{
+		_thread.join();
+	}
+}
+
+void gb::gb_thread::post_stop()
+{
+	command fn([] (){ 
+		throw stop_exception();
+	});
+
+	std::lock_guard<std::mutex> lock(_mutex);
+	_command_queue.emplace_back(std::move(fn));
+}
+
+std::future<gb::video::raw_image> gb::gb_thread::post_get_image()
+{
+	// TODO use capture by move (Visual Studio 2015/C++14)
+	auto promise = std::make_shared<std::promise<video::raw_image>>();
+	auto future = promise->get_future();
+	command fn([this, promise] () {
+		promise->set_value(_gb->video.image());
+	});
+
+	std::lock_guard<std::mutex> lock(_mutex);
+	_command_queue.emplace_back(std::move(fn));
+	return future;
+}
+
+void gb::gb_thread::run()
+{
+	using namespace std::chrono;
+
+	using clock = steady_clock;
+	static_assert(clock::is_monotonic, "clock not monotonic");
+	static_assert(clock::is_steady, "clock not steady");
+	static_assert(std::ratio_less_equal<clock::period, std::ratio_multiply<std::ratio<100>, std::nano>>::value,
+		"clock too inaccurate (period > 100ns)");
+
+	if (ASSERT_ENABLED)
+		debug("WARNING: asserts are enabled!");
 
 	// Let's go :)
 	std::vector<command> current_commands;
@@ -190,23 +210,13 @@ void gb::gb_thread::run(gb::rom rom)
 			{
 				for (const auto &command : current_commands)
 				{
-					command(video);
+					command();
 				}
 				current_commands.clear();
 			}
 
 			// Simulation itself
-			const auto time_fde = cpu.fetch_decode_execute();
-			timer.tick(cpu, time_fde);
-
-			const auto time_r = cpu.read();
-			timer.tick(cpu, time_r);
-
-			const auto time_w = cpu.write();
-			timer.tick(cpu, time_w);
-
-			const auto time = time_fde + time_r + time_w;
-			video.tick(cpu, time);
+			const auto time = _gb->tick();
 
 			// Time bookkeeping
 			gb_time += time;
