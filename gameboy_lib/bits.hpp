@@ -3,20 +3,20 @@
 namespace bit
 {
 
-template <typename T>
-T &set(T &value, T mask)
+template <typename T, typename M>
+T &set(T &value, M mask)
 {
 	return value |= mask;
 }
 
-template <typename T>
-T &clear(T &value, T mask)
+template <typename T, typename M>
+T &clear(T &value, M mask)
 {
 	return value &= ~mask;
 }
 
-template <typename T>
-bool test(T value, T mask)
+template <typename T, typename M>
+bool test(T value, M mask)
 {
 	return (value & mask) == mask;
 }

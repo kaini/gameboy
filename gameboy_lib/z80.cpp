@@ -59,7 +59,8 @@ std::string gb::to_string(register16 r)
 
 gb::register_file::register_file()
 {
-	_pc = _sp = _f = _a = _c = _b = _e = _d = _l = _h = 0;
+	_pc = _sp = _a = _c = _b = _e = _d = _l = _h = 0;
+	_flag_z = _flag_n = _flag_h = _flag_c = false;
 }
 
 void gb::register_file::debug_print() const
@@ -67,7 +68,7 @@ void gb::register_file::debug_print() const
 	char buffer[200];
 	sprintf(buffer,
 		"AF=%02x%02x  BC=%02x%02x  DE=%02x%02x  HL=%02x%02x  SP=%04x  PC=%04x  [%c%c%c%c]",
-		static_cast<int>(_a), static_cast<int>(_f), static_cast<int>(_b), static_cast<int>(_c),
+		static_cast<int>(_a), static_cast<int>(read8<register8::f>()), static_cast<int>(_b), static_cast<int>(_c),
 		static_cast<int>(_d), static_cast<int>(_e), static_cast<int>(_h), static_cast<int>(_l),
 		static_cast<int>(_sp), static_cast<int>(_pc), get<cpu_flag::z>() ? 'z' : ' ',
 		get<cpu_flag::n>() ? 'n' : ' ', get<cpu_flag::h>() ? 'h' : ' ',
