@@ -2,14 +2,17 @@
 #include <QPainter>
 #include <QTimer>
 #include <QMessageBox>
+#include <QKeyEvent>
 #include <z80opcodes.hpp>
 #include <debug.hpp>
 
-game_window::game_window(gb::rom rom, QWidget *parent) :
+game_window::game_window(gb::rom rom, std::shared_ptr<const key_map> map, QWidget *parent) :
+	_keys(std::move(map)),
 	QMainWindow(parent)
 {
 	_ui.setupUi(this);
 	resize(gb::video::width * 2, gb::video::height * 2);
+	setFocusPolicy(Qt::StrongFocus);
 
 	auto _refresh_timer = new QTimer(this);
 	_refresh_timer->setInterval(1000 / 60 / 2);  // TODO better method for this?
@@ -53,4 +56,30 @@ void game_window::paintEvent(QPaintEvent *)
 	}
 		
 	painter.drawImage(i_rect, q_image);
+}
+
+void game_window::keyPressEvent(QKeyEvent *event)
+{
+	auto iter = _keys->find(event->key());
+	if (iter == _keys->end())
+	{
+		QMainWindow::keyPressEvent(event);
+	}
+	else
+	{
+		_thread.post_key_down(iter->second);
+	}
+}
+
+void game_window::keyReleaseEvent(QKeyEvent *event)
+{
+	auto iter = _keys->find(event->key());
+	if (iter == _keys->end())
+	{
+		QMainWindow::keyPressEvent(event);
+	}
+	else
+	{
+		_thread.post_key_up(iter->second);
+	}
 }

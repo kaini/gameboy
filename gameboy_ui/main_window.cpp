@@ -17,6 +17,16 @@ main_window::main_window(QWidget *parent)
 
 	load_rom(_settings.value("open_rom_path", "").toString().toStdString(), false);
 	update_rom_info();
+
+	_key_map = std::make_shared<game_window::key_map>();
+	(*_key_map)[Qt::Key_W] = gb::key::up;
+	(*_key_map)[Qt::Key_S] = gb::key::down;
+	(*_key_map)[Qt::Key_A] = gb::key::left;
+	(*_key_map)[Qt::Key_D] = gb::key::right;
+	(*_key_map)[Qt::Key_J] = gb::key::a;
+	(*_key_map)[Qt::Key_K] = gb::key::b;
+	(*_key_map)[Qt::Key_U] = gb::key::start;
+	(*_key_map)[Qt::Key_I] = gb::key::select;
 }
 
 main_window::~main_window()
@@ -54,7 +64,7 @@ void main_window::play()
 	{
 		try
 		{
-			_game_window = new game_window(*_rom);
+			_game_window = new game_window(*_rom, _key_map);
 			_game_window->setAttribute(Qt::WA_DeleteOnClose);
 			connect(_game_window, SIGNAL(destroyed()), this, SLOT(set_game_window_null()));
 			_game_window->show();

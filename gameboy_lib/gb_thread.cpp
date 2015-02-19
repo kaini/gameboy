@@ -173,7 +173,7 @@ void gb::gb_thread::join()
 
 void gb::gb_thread::post_stop()
 {
-	command fn([] (){ 
+	command fn([](){ 
 		throw stop_exception();
 	});
 
@@ -186,13 +186,33 @@ std::future<gb::video::raw_image> gb::gb_thread::post_get_image()
 	// TODO use capture by move (Visual Studio 2015/C++14)
 	auto promise = std::make_shared<std::promise<video::raw_image>>();
 	auto future = promise->get_future();
-	command fn([this, promise] () {
+	command fn([this, promise]() {
 		promise->set_value(_gb->video.image());
 	});
 
 	std::lock_guard<std::mutex> lock(_mutex);
 	_command_queue.emplace_back(std::move(fn));
 	return future;
+}
+
+void gb::gb_thread::post_key_down(gb::key key)
+{
+	command fn([this, key]() {
+		_gb->joypad.down(key);
+	});
+
+	std::lock_guard<std::mutex> lock(_mutex);
+	_command_queue.emplace_back(std::move(fn));
+}
+
+void gb::gb_thread::post_key_up(gb::key key)
+{
+	command fn([this, key]() {
+		_gb->joypad.up(key);
+	});
+
+	std::lock_guard<std::mutex> lock(_mutex);
+	_command_queue.emplace_back(std::move(fn));
 }
 
 void gb::gb_thread::run()

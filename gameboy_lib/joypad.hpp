@@ -4,7 +4,18 @@
 namespace gb
 {
 
-// TODO implement this thing
+enum class key
+{
+	right = 0,  // bit 0
+	left,       // bit 1
+	up,         // bit 2
+	down,       // bit 3
+	a,          // bit 0
+	b,          // bit 1
+	select,     // bit 2
+	start,      // bit 3
+};
+
 class joypad : public memory_mapping
 {
 public:
@@ -16,6 +27,9 @@ public:
 	bool read8(uint16_t addr, uint8_t & value) const override;
 	bool write8(uint16_t addr, uint8_t value) override;
 
+	void down(key key);
+	void up(key key);
+
 private:
 	// Bit 7  -
 	//     6  -
@@ -26,7 +40,8 @@ private:
 	//     1  Left/B
 	//     0  Right/A
 	// IMPORTANT: 1 = released and 0 = pressed
-	uint8_t _register;
+	bool _arrows_select, _buttons_select;
+	unsigned int _arrows, _buttons;
 };
 
 }

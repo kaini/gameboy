@@ -4,8 +4,8 @@
 #include <memory>
 #include <rom.hpp>
 #include "ui_main_window.h"
+#include "game_window.hpp"
 
-class game_window;
 class QCloseEvent;
 
 class main_window : public QMainWindow
@@ -32,4 +32,5 @@ private:
 	Ui::mainWindowUiClass _ui;
 	std::unique_ptr<gb::rom> _rom;
 	game_window *_game_window;
+	std::shared_ptr<game_window::key_map> _key_map;
 };

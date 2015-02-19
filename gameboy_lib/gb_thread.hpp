@@ -57,6 +57,9 @@ public:
 	void post_stop();
 	/** Posts a request to get the current image. */
 	std::future<video::raw_image> post_get_image();
+	/** Key events. */
+	void post_key_down(gb::key key);
+	void post_key_up(gb::key key);
 
 private:
 	// Client Data
