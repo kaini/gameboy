@@ -118,7 +118,7 @@ private:
 	void set_ly(z80_cpu &cpu, uint8_t value);
 	std::array<uint8_t, 3> &image(int x, int y) { return _image[y][x]; }
 	const uint8_t *get_bg_tile(uint8_t bank, uint8_t idx) const;
-	const std::array<uint8_t, 3> get_bg_color(size_t bgp_idx, size_t color_idx) const;
+	std::array<uint8_t, 3> get_color(size_t bgp_idx, size_t color_idx, bool bg) const;
 
 	std::array<uint8_t, 0x30> _registers;
 	std::array<std::array<uint8_t, 0x2000>, 2> _vram;

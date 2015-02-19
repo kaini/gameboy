@@ -2,6 +2,7 @@
 #include "debug.hpp"
 #include "z80.hpp"
 #include "bits.hpp"
+#include <bitset>
 #include <algorithm>
 
 const gb::cputime gb::video::dma_time(std::chrono::duration_cast<gb::cputime>(std::chrono::microseconds(160)));
@@ -361,6 +362,24 @@ void gb::video::tick(gb::z80_cpu &cpu, cputime time)
 	}
 }
 
+// Parses sprite data and returns the color index for the given (sprite local) pixel.
+static int draw_sprite(const uint8_t *sprite_data, int x, int y)
+{
+	ASSERT(sprite_data != nullptr);
+	ASSERT(0 <= x && x <= 7);
+	ASSERT(0 <= y && y <= 15);
+
+	const auto tile_line_index = y * 2;
+	const auto tile_x_bit = 7 - x;
+	auto color_idx = 0;
+	if ((sprite_data[tile_line_index] & (1 << tile_x_bit)) != 0)
+		color_idx |= 1;
+	if ((sprite_data[tile_line_index + 1] & (1 << tile_x_bit)) != 0)
+		color_idx |= 2;
+
+	return color_idx;
+}
+
 void gb::video::draw_line(const int y)
 {
 	// debug("DRAWING line ", y);
@@ -384,6 +403,17 @@ void gb::video::draw_line(const int y)
 		bg_tile_map = &_vram[0][0x9800 - 0x8000];
 		bg_tile_map_attrs = &_vram[1][0x9800 - 0x8000];
 	}
+
+	const bool window_enabled = bit::test(lcdc, lcdc_flag::window_display_enable);
+	if (window_enabled) debug("NIP: window display not implemented");
+
+	const bool sprite_enabled = bit::test(lcdc, lcdc_flag::obj_display_enable);
+	const auto sprite_size_x = 8;
+	const auto sprite_size_y = bit::test(lcdc, lcdc_flag::obj_size) ? 16 : 8;
+
+	// Used by sprites drawing to have correct z-ordering (no overdraw if the bit is true)
+	// but it must be accessible by the BG-drawing because of the OBJ-to-BG priority flag.
+	std::bitset<video::width> pixel_done;
 
 	for (int x = 0; x < width; ++x)
 	{
@@ -410,19 +440,63 @@ void gb::video::draw_line(const int y)
 
 			if (hflip) debug("NIP: hflip at ", x, " ", y);
 			if (vflip) debug("NIP: vflip at ", x, " ", y);
-			//if (priority) debug("NIP: bg over oam priority ", x, " ", y);
 			// TODO hflip
 			// TODO vflip
-			// TODO priority
 
-			const size_t tile_line_index = ((y + scy) % 8) * 2;
-			const size_t tile_x_bit = 7 - (x + scx) % 8;
-			size_t color_idx = 0;
-			if ((tile_data[tile_line_index] & (1 << tile_x_bit)) != 0)
-				color_idx |= 1;
-			if ((tile_data[tile_line_index + 1] & (1 << tile_x_bit)) != 0)
-				color_idx |= 2;
-			image(x, y) = get_bg_color(bgp_idx, color_idx);
+			const auto color_idx = draw_sprite(tile_data, (x + scx) % 8, (y + scy) % 8);
+			if (priority && color_idx != 0)
+			{
+				// even if there is priority set, BG color 0 is always behind the object
+				pixel_done[x] = true;
+			}
+			image(x, y) = get_color(bgp_idx, color_idx, true);
+		}
+	}
+
+	// Objects/Sprites
+	if (sprite_enabled) {
+		int drawn_count = 0;
+		for (int i = 0; i < 40 && drawn_count < 10; ++i)
+		{
+			const auto sprite_y = _sprite_attribs[i * 4] - 16;
+			if (!(sprite_y <= y && y < sprite_y + sprite_size_y))
+				continue;
+			++drawn_count;
+
+			const auto sprite_attrs = _sprite_attribs[i * 4 + 3];
+			const auto palette_idx = sprite_attrs & 0x7;
+			const auto vram_bank = bit::test(sprite_attrs, 1 << 3) ? 1 : 0;
+			// bit 4 only relevant in DMG mode
+			const auto x_flip = bit::test(sprite_attrs, 1 << 5);
+			const auto y_flip = bit::test(sprite_attrs, 1 << 6);
+			const auto behind_bg = bit::test(sprite_attrs, 1 << 7);
+
+			if (x_flip) debug("NIP: sprite x-flip");  // TODO
+			if (y_flip) debug("NIP: sprite y-flip");  // TODO
+			if (behind_bg) debug("NIP: sprite behind bg color 1-3");  // TODO
+
+			auto tile_idx = _sprite_attribs[i * 4 + 2];
+			if (sprite_size_y == 16)
+				tile_idx &= 0xFE;
+			const auto tile_data = &_vram[vram_bank][tile_idx * 16];
+
+			const auto sprite_local_y = y - sprite_y;
+			const auto sprite_x = _sprite_attribs[i * 4 + 1] - 8;
+			for (auto x = sprite_x; x < sprite_x + sprite_size_x; ++x)
+			{
+				if (x < 0 || x >= video::width)
+					continue;
+				if (pixel_done[x])
+					continue;
+
+				const auto sprite_local_x = x - sprite_x;
+				const auto color_index = draw_sprite(tile_data, sprite_local_x, sprite_local_y);
+				if (color_index != 0)  // 0 is always transparent
+				{
+					pixel_done[x] = true;
+					image(x, y) = get_color(palette_idx, color_index, false);
+				}
+			}
 		}
 	}
 }
@@ -456,9 +530,12 @@ const uint8_t *gb::video::get_bg_tile(uint8_t bank, uint8_t idx) const
 	}
 }
 
-const std::array<uint8_t, 3> gb::video::get_bg_color(size_t bgp_idx, size_t color_idx) const
+std::array<uint8_t, 3> gb::video::get_color(size_t pal_idx, size_t color_idx, bool bg) const
 {
-	const auto color_ptr = &_bgp[bgp_idx * 8 + color_idx * 2];
+	ASSERT(pal_idx < 8);
+	ASSERT(color_idx < 4);
+
+	const auto color_ptr = &(bg ? _bgp : _obp)[pal_idx * 8 + color_idx * 2];
 
 	double r = color_ptr[0] & 0x1F;
 	r = r / 0x1F;
