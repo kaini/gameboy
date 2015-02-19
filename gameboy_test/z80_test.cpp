@@ -12,7 +12,7 @@ namespace
 class test_memory : public gb::memory_mapping
 {
 public:
-	test_memory(std::vector<uint8_t> code, std::unordered_set<uint16_t> writes={}) :
+	test_memory(std::vector<uint8_t> code, std::unordered_set<uint16_t> writes=std::unordered_set<uint16_t>()) :
 		_code(std::move(code)), _writes(writes)
 	{
 		std::fill(_ram.begin(), _ram.end(), 0);
@@ -52,7 +52,7 @@ private:
 
 static gb::z80_cpu run_cpu(test_memory *mapping, int instructions, gb::register_file registers=gb::register_file())
 {
-	gb::memory memory;
+	gb::memory_map memory;
 	memory.add_mapping(mapping);
 	gb::z80_cpu cpu(std::move(memory), std::move(registers));
 	cpu.registers() = registers;

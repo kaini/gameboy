@@ -15,10 +15,10 @@ public:
 	virtual bool write8(uint16_t addr, uint8_t value) = 0;
 };
 
-class memory
+class memory_map
 {
 public:
-	memory() : _dma_mode(false) {}
+	memory_map() : _dma_mode(false) {}
 
 	void add_mapping(memory_mapping *m) { _mappings.emplace_back(m); }
 

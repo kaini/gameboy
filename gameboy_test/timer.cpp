@@ -11,7 +11,7 @@ using gb::cputime;
 BOOST_AUTO_TEST_CASE(test_timer_div)
 {
 	gb::timer timer;
-	gb::memory memory;
+	gb::memory_map memory;
 	memory.add_mapping(&timer);
 	gb::z80_cpu cpu(std::move(memory), gb::register_file());
 
@@ -23,7 +23,7 @@ BOOST_AUTO_TEST_CASE(test_timer_div)
 	timer.tick(cpu, cputime(512 * 2));
 	BOOST_CHECK_EQUAL(cpu.memory().read8(gb::timer::div), 3);
 
-	memory.write8(gb::timer::div, 10);
+	cpu.memory().write8(gb::timer::div, 10);
 	timer.tick(cpu, cputime(500));
 	BOOST_CHECK_EQUAL(cpu.memory().read8(gb::timer::div), 0);
 	timer.tick(cpu, cputime(11));
@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(test_timer_tima_tma_tac)
 {
 	gb::timer timer;
 	gb::internal_ram internal_ram;
-	gb::memory memory;
+	gb::memory_map memory;
 	memory.add_mapping(&timer);
 	memory.add_mapping(&internal_ram);
 	gb::z80_cpu cpu(std::move(memory), gb::register_file());

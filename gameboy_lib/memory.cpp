@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <iomanip>
 
-uint8_t gb::memory::read8(uint16_t addr) const
+uint8_t gb::memory_map::read8(uint16_t addr) const
 {
 	if (_dma_mode && !(0xFF80 <= addr && addr <= 0xFFFE))
 	{
@@ -23,7 +23,7 @@ uint8_t gb::memory::read8(uint16_t addr) const
 	return 0;
 }
 
-void gb::memory::write8(uint16_t addr, uint8_t value)
+void gb::memory_map::write8(uint16_t addr, uint8_t value)
 {
 	if (_dma_mode && !(0xFF80 <= addr && addr <= 0xFFFE))
 	{
@@ -42,14 +42,14 @@ void gb::memory::write8(uint16_t addr, uint8_t value)
 	debug("WARNING: non-mapped write ", addr, ": ", static_cast<int>(value));
 }
 
-uint16_t gb::memory::read16(uint16_t addr) const
+uint16_t gb::memory_map::read16(uint16_t addr) const
 {
 	uint16_t low = read8(addr);
 	uint16_t high = read8(addr + 1);
 	return (high << 8) | low;
 }
 
-void gb::memory::write16(uint16_t addr, uint16_t value)
+void gb::memory_map::write16(uint16_t addr, uint16_t value)
 {
 	uint8_t high = value >> 8;
 	uint8_t low = value & 0xFF;

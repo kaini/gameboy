@@ -5,6 +5,10 @@
 	#error ASSERT already defined
 #endif
 
+#ifndef _MSC_VER
+	#define __assume(x)
+#endif
+
 #if !defined(NDEBUG)
 
 	#define ASSERT_ENABLED true

@@ -76,7 +76,7 @@ void gb::register_file::debug_print() const
 	debug(buffer);
 }
 
-gb::z80_cpu::z80_cpu(gb::memory memory, gb::register_file registers) :
+gb::z80_cpu::z80_cpu(gb::memory_map memory, gb::register_file registers) :
 	_registers(registers),
 	_memory(std::move(memory)),
 	_ime(false),

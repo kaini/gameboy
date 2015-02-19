@@ -45,7 +45,7 @@ std::unique_ptr<gb::z80_cpu> init_cpu(gb::memory_mapping &cart, gb::internal_ram
 		gb::video &video, gb::timer &timer, gb::joypad &joypad, gb::sound &sound)
 {
 	// Make Memory
-	gb::memory memory;
+	gb::memory_map memory;
 	memory.add_mapping(&cart);
 	memory.add_mapping(&internal_ram);
 	memory.add_mapping(&video);
@@ -220,7 +220,6 @@ void gb::gb_thread::run()
 	using namespace std::chrono;
 
 	using clock = steady_clock;
-	static_assert(clock::is_monotonic, "clock not monotonic");
 	static_assert(clock::is_steady, "clock not steady");
 	static_assert(std::ratio_less_equal<clock::period, std::ratio_multiply<std::ratio<100>, std::nano>>::value,
 		"clock too inaccurate (period > 100ns)");
